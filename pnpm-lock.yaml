@@ -160,6 +160,9 @@ importers:
 
   packages/web:
     dependencies:
+      '@hallmark/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@hallmark/simulator':
         specifier: workspace:*
         version: link:../simulator

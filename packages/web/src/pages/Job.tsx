@@ -1,185 +1,102 @@
-import { useEffect, useState } from "react";
-import { GATEWAY, getJson, short, tinybarToHbar, type JobView } from "../api";
-import { Badge, Mark } from "../Badge";
-import { useQuery } from "@tanstack/react-query";
-import type { TierRow } from "../api";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Badge } from "../Badge";
+import { GATEWAY, getJson, short, SLASH_REASON, tinybarToHbar, type JobView } from "../api";
 
-const STEPS = ["Paid", "Assigned", "Revealing", "ChallengeWindow", "Arbitration", "Settled", "Refunded"];
-const SEED = ["Hedera PRNG", "prevrandao", "weak fallback"];
+const STEPS: Array<{ key: string; label: string; done: (j: JobView, ev: Set<string>) => boolean }> = [
+  { key: "paid", label: "Paid (x402)", done: (j) => !!j.payment.settleTx },
+  { key: "created", label: "Executor drawn", done: (_j, e) => e.has("JobCreated") },
+  { key: "commit", label: "Executor committed", done: (_j, e) => e.has("Committed") },
+  { key: "draw", label: "Audit drawn", done: (_j, e) => e.has("AuditDrawn") },
+  { key: "verify", label: "Verifier re-ran (blind)", done: (j, e) => !!j.verifier && e.has("VerifierAssigned") },
+  { key: "reveal", label: "Revealed", done: (_j, e) => e.has("Revealed") },
+  { key: "committee", label: "Committee", done: (_j, e) => e.has("CommitteeDrawn") },
+  { key: "end", label: "Settled / refunded", done: (j) => j.final },
+];
 
 export function JobPage({ jobId }: { jobId: string }) {
-  const [job, setJob] = useState<JobView | null>(null);
-  const [result, setResult] = useState<Record<string, unknown> | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
+  const qc = useQueryClient();
+  const valid = /^0x[0-9a-fA-F]{64}$/.test(jobId);
+  const job = useQuery({ queryKey: ["job", jobId], queryFn: () => getJson<JobView>(`/v1/jobs/${jobId}`), enabled: valid, refetchInterval: 5000 });
+  const result = useQuery({ queryKey: ["result", jobId], queryFn: () => getJson<{ text?: string; provisional?: boolean; error?: string }>(`/v1/jobs/${jobId}/result`), enabled: valid, refetchInterval: 5000 });
   useEffect(() => {
-    if (!jobId) return;
-    setJob(null);
-    setErr(null);
+    if (!valid || !GATEWAY) return;
     const es = new EventSource(`${GATEWAY}/v1/jobs/${jobId}/events`);
-    es.onmessage = (m) => {
-      const d = JSON.parse(m.data);
-      if (d.job) setJob(d.job);
-    };
-    es.onerror = () => setErr("live stream interrupted; retrying…");
+    es.addEventListener("chain", () => {
+      void qc.invalidateQueries({ queryKey: ["job", jobId] });
+      void qc.invalidateQueries({ queryKey: ["result", jobId] });
+    });
     return () => es.close();
-  }, [jobId]);
+  }, [jobId, valid, qc]);
 
-  useEffect(() => {
-    if (!job) return;
-    fetch(`${GATEWAY}/v1/jobs/${jobId}/result`)
-      .then(async (r) => setResult({ httpStatus: r.status, ...(await r.json()) }))
-      .catch(() => undefined);
-  }, [job?.status, jobId]);
-
-  if (!jobId) return <p className="muted">Enter a job id, or run one from “Try it”.</p>;
-  if (!job) return <p className="muted">{err ?? "Loading…"}</p>;
-  const slashed = job.events.some((e) => e.name === "Slashed" && Number(e.args.reason) === 3);
-  const reached = new Set(["Paid", ...job.events.map((e) => (e.name === "JobCreated" ? "Assigned" : e.name === "RevealOpened" ? "Revealing" : e.name === "Challenged" ? "Arbitration" : e.name === "JobSettled" ? "Settled" : e.name === "JobRefunded" ? "Refunded" : "")), job.status]);
-
+  if (!valid) return <p className="muted">Enter a job id.</p>;
+  if (job.isLoading) return <p className="muted">Loading...</p>;
+  if (job.error || !job.data) return <p className="bad">{String(job.error ?? "unknown job")}</p>;
+  const j = job.data;
+  const ev = new Set(j.events.map((e) => e.name));
+  const firstOpen = STEPS.findIndex((s) => !s.done(j, ev));
   return (
     <div className="stack">
-      <div className="row between">
-        <h2 className="mono">{short(job.jobId)}</h2>
-        <div className="row">
-          <span className="badge muted" title="assurance tier the buyer paid for">{job.tier}</span>
-          <Badge level={job.verificationLevel} />
-          <Mark status={job.status} slashed={slashed} />
-        </div>
+      <div className="row between wrap">
+        <h2>
+          {j.task.toUpperCase()} job <span className="mono small">{short(j.jobId)}</span>
+        </h2>
+        <Badge badge={j.badge} />
       </div>
-      <ol className="timeline">
-        {STEPS.filter((s) => s !== "Refunded" || reached.has("Refunded")).map((s) => (
-          <li key={s} className={reached.has(s) ? "done" : job.status === s ? "now" : ""}>
-            {s === "ChallengeWindow" ? "Challenge window" : s}
+      <ul className="timeline">
+        {STEPS.map((s, i) => (
+          <li key={s.key} className={s.done(j, ev) ? "done" : i === firstOpen ? "now" : ""}>
+            {s.label}
           </li>
         ))}
-      </ol>
-      <section className="card">
+      </ul>
+      <div className="card">
         <h3>Result</h3>
-        {result?.transcript ? (
+        {result.data?.text !== undefined ? (
           <>
-            <p className="transcript">“{String(result.transcript)}”</p>
-            <p className="muted">{result.final ? "Final." : "Provisional — bond-backed, challenge window open."}</p>
+            <p className="transcript">"{result.data.text}"</p>
+            <p className="small muted">{result.data.provisional ? "Provisional: the challenge window or the audit is still open." : "Final."} Shows fidelity to the pinned model, not that the text is true.</p>
           </>
         ) : (
-          <p className="muted">{job.status === "Refunded" || job.payment.status === "Rejected" ? "No accepted transcript. The buyer was refunded." : "Not available yet."}</p>
+          <p className="muted">{result.data?.error ?? "Not available yet."}</p>
         )}
-      </section>
-      <section className="grid2">
+      </div>
+      <div className="grid2">
         <div className="card">
-          <h3>Payment (x402 on Hedera)</h3>
+          <h3>Parties</h3>
           <dl>
-            <dt>Status</dt>
-            <dd>{job.payment.status}</dd>
-            <dt>Payer</dt>
-            <dd className="mono">{job.payment.payer ?? "—"}</dd>
-            <dt>Settlement</dt>
-            <dd>{job.payment.settleLink ? <a href={job.payment.settleLink} target="_blank" rel="noreferrer">{job.payment.settleTx}</a> : "—"}</dd>
-            {job.payment.refundLink && (
-              <>
-                <dt>Refund</dt>
-                <dd>
-                  <a href={job.payment.refundLink} target="_blank" rel="noreferrer">{job.payment.refundTx}</a>
-                </dd>
-              </>
-            )}
+            <span><dt>Executor</dt><dd className="mono">{short(j.executor)}</dd></span>
+            <span><dt>Verifier</dt><dd className="mono">{j.verifier && !/^0x0+$/.test(j.verifier) ? short(j.verifier) : "not audited"}</dd></span>
+            <span><dt>Committee</dt><dd className="mono">{j.committee.length ? j.committee.map(short).join(", ") : "-"}</dd></span>
+            <span><dt>Bond (each)</dt><dd>{tinybarToHbar(j.bond)}</dd></span>
+            <span><dt>Challenged</dt><dd>{j.challenged ? "yes" : "no"}</dd></span>
           </dl>
         </div>
         <div className="card">
-          <h3>Job</h3>
+          <h3>Payment</h3>
           <dl>
-            <dt>Fee / bond per seat</dt>
-            <dd>
-              {tinybarToHbar(job.fee)} / {tinybarToHbar(job.bond)}
-            </dd>
-            <dt>Committee</dt>
-            <dd className="mono">{job.committee.map(short).join(", ") || "—"}</dd>
-            <dt>Randomness</dt>
-            <dd>{job.seedSource === null ? "—" : SEED[job.seedSource]}</dd>
-            <dt>Input availability</dt>
-            <dd>{job.availability === "gateway-hosted" ? "gateway-hosted (0G Storage not used)" : job.availability}</dd>
-            <dt>Audited / arbitrated</dt>
-            <dd>
-              {job.audited ? "audited" : "—"} / {job.arbitrated ? "yes" : "no"}
-            </dd>
+            <span><dt>Price</dt><dd>{tinybarToHbar(j.price)}</dd></span>
+            <span><dt>Status</dt><dd>{j.payment.status}</dd></span>
+            <span><dt>x402 settlement</dt><dd>{j.payment.settleLink ? <a href={j.payment.settleLink} target="_blank" rel="noreferrer">HashScan</a> : "-"}</dd></span>
+            <span><dt>Refund</dt><dd>{j.payment.refundLink ? <a href={j.payment.refundLink} target="_blank" rel="noreferrer">HashScan</a> : "-"}</dd></span>
+            <span><dt>Input hash</dt><dd className="mono small">{j.inputHash}</dd></span>
           </dl>
         </div>
-      </section>
-      <Equalisation current={job.tier} />
-      <section className="card">
+      </div>
+      <div className="card">
         <h3>On-chain events</h3>
-        <table>
+        <table className="small">
           <tbody>
-            {job.events.map((e, i) => (
+            {j.events.map((e, i) => (
               <tr key={i}>
                 <td>{e.name}</td>
-                <td className="mono small">{summarize(e)}</td>
-                <td>{e.link ? <a href={e.link} target="_blank" rel="noreferrer">tx</a> : null}</td>
+                <td className="mono">{e.name === "Slashed" ? `${short(String(e.args.who))} ${SLASH_REASON[String(e.args.reason)] ?? ""} ${tinybarToHbar(String(e.args.amount))}` : ""}</td>
+                <td>{e.link ? <a href={e.link} target="_blank" rel="noreferrer">tx</a> : ""}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </section>
+      </div>
     </div>
   );
-}
-
-/** Security-equalisation table (Addendum A §1.7): cheaper tiers pay for weaker audits with bigger bonds. */
-function Equalisation({ current }: { current: string }) {
-  const q = useQuery({ queryKey: ["network"], queryFn: () => getJson<{ tiers: TierRow[]; params: Record<string, string> }>("/v1/network") });
-  if (!q.data) return null;
-  const cMax = Number(q.data.params.cMax ?? 0);
-  const share = Number(q.data.params.baseMinerFee ?? 0) / 2;
-  return (
-    <section className="card">
-      <h3>Security equalisation</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Tier</th>
-            <th>Price</th>
-            <th>Audit rate</th>
-            <th>Bond / seat</th>
-            <th>bond + share ≥ cMax / audit rate</th>
-          </tr>
-        </thead>
-        <tbody>
-          {q.data.tiers.map((t) => {
-            const need = cMax / (t.auditBps / 10000);
-            const holds = Number(t.bond) + share >= need - 1;
-            return (
-              <tr key={t.name} className={t.name === current ? "now" : ""}>
-                <td>{t.name}</td>
-                <td>{tinybarToHbar(t.priceTinybar)}</td>
-                <td>{t.auditBps / 100}%</td>
-                <td>{t.available ? tinybarToHbar(t.bond) : "disabled (bond > max)"}</td>
-                <td className={holds ? "ok" : "bad"}>
-                  {tinybarToHbar(Number(t.bond) + share)} ≥ {tinybarToHbar(Math.ceil(need))} {holds ? "✓" : "✗"}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <p className="small muted">Every tier faces the same cheating inequality against a colluding pair; cMax is {q.data.params.cMax ? tinybarToHbar(q.data.params.cMax) : "—"} (on-chain parameter).</p>
-    </section>
-  );
-}
-
-function summarize(e: { name: string; args: Record<string, unknown> }) {
-  const a = e.args;
-  switch (e.name) {
-    case "Revealed":
-      return `${short(String(a.miner))}: “${a.output}”`;
-    case "SeatJudged":
-      return `${short(String(a.miner))}: overlap ${a.overlapBps} bps → ${a.ok ? "paid" : "slashed"}`;
-    case "Slashed":
-      return `${short(String(a.miner))}: −${tinybarToHbar(String(a.amount))} (${["", "no commit", "no reveal", "wrong output"][Number(a.reason)]})`;
-    case "BuyerRefunded":
-      return `${tinybarToHbar(String(a.amount))} to buyer`;
-    case "EvidenceAccepted":
-      return `evidence ${short(String(a.evidenceRoot))}`;
-    default:
-      return "";
-  }
 }

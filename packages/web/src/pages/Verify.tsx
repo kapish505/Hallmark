@@ -4,14 +4,14 @@ export function VerifyPage({ jobId }: { jobId: string }) {
     <div className="stack narrow">
       <h2>Verify a job yourself</h2>
       <p>
-        The verifier re-derives the outcome from public data only: it re-reads every event from its transaction receipt, downloads the audio and
-        the evidence bundle, recomputes normalization and overlap, and re-checks the 0G TEE signature against the provider’s on-chain signer.
+        The verifier re-derives the verdict from public data: it re-reads every event from its transaction receipt, re-hashes the input and every
+        revealed output, re-checks normalization, recomputes the executor/verifier comparison and the committee majority, and checks that money moved
+        accordingly and that the contract balance equals its liabilities.
       </p>
       <pre>{`git clone <repo> && cd hallmark && pnpm install
-export HALLMARK_ADDRESS=... ARBITRATION_ADDRESS=... JUDGE_ADDRESS=... REGISTRY_ADDRESS=...
-export GATEWAY_URL=...
+export HALLMARK_ADDRESS=... JUDGE_ADDRESS=... REGISTRY_ADDRESS=... GATEWAY_URL=...
 pnpm verify ${id}`}</pre>
-      <p className="small muted">Each check prints PASS, FAIL or SKIP (not applicable, or not verifiable — e.g. an unattested result).</p>
+      <p className="small muted">The gateway is used only to learn transaction hashes and to fetch blobs by hash; every value is re-checked locally.</p>
     </div>
   );
 }

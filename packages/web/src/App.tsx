@@ -3,11 +3,11 @@ import { GATEWAY } from "./api";
 import { JobPage } from "./pages/Job";
 import { TryPage } from "./pages/Try";
 import { NetworkPage } from "./pages/Network";
-import { EconomicsPage } from "./pages/Economics";
+import { CoreModelPage } from "./pages/CoreModel";
 import { AttackPage } from "./pages/Attack";
 import { VerifyPage } from "./pages/Verify";
 
-const TABS = ["Try it", "Job", "Network", "Economics", "Attack lab", "Verify"] as const;
+const TABS = ["Try it", "Job", "Network", "Core model", "Attack lab", "Verify"] as const;
 type Tab = (typeof TABS)[number];
 
 export function App() {
@@ -25,7 +25,7 @@ export function App() {
       <header>
         <div className="brand">
           <span className="logo">◆</span> Hallmark
-          <span className="sub">pay-per-request AI inference, wrong answers refunded</span>
+          <span className="sub">pay-per-request OCR and speech-to-text from bonded operators, checked by sampled re-runs</span>
         </div>
         <nav>
           {TABS.map((t) => (
@@ -45,12 +45,12 @@ export function App() {
           </>
         )}
         {tab === "Network" && <NetworkPage />}
-        {tab === "Economics" && <EconomicsPage />}
+        {tab === "Core model" && <CoreModelPage />}
         {tab === "Attack lab" && <AttackPage onJob={openJob} />}
         {tab === "Verify" && <VerifyPage jobId={jobId} />}
       </main>
       <footer className="small muted">
-        Testnet only · Hedera x402 payments · 0G attested re-runs for disputes · not trustless: see trust assumptions in the README
+        Testnet only · x402 payments on Hedera · shows fidelity to a pinned model, not truth · trust assumptions T1-T6 in the README
       </footer>
     </div>
   );
