@@ -1,0 +1,64 @@
+{
+  "ranAt": "2026-11-05T23:05:57.243Z",
+  "rpc": "https://testnet.hashio.io/api",
+  "probe": "0x725D54A46B0000e1CDa4bB71Cc188F06291bdA46",
+  "deposit_1HBAR": {
+    "hash": "0xad458c143a3a85a9f268280c2140b0e19352c8ac8ec7879d1184ae6065f692bb",
+    "status": 1,
+    "gasUsed": "66914",
+    "confirmMs": 6872,
+    "mirrorLagMs": 770,
+    "chargedFeeTinybar": 8431164
+  },
+  "units": {
+    "msgValueSeen": "100000000",
+    "expectTinybar": "100000000",
+    "tinybarInsideSolidity": true,
+    "balanceSeen": "100000000",
+    "rpcBalanceWire": "1000000000000000000"
+  },
+  "constructorValue": "0",
+  "seed_tx1": {
+    "hash": "0x703e6b1a9f66a27fedcb7524cf801660a86073ea0a8eb8b64c47652ccad46752",
+    "status": 1,
+    "gasUsed": "84136",
+    "confirmMs": 6651,
+    "mirrorLagMs": 724,
+    "chargedFeeTinybar": 10601136
+  },
+  "seed_tx1_result": {
+    "ok": true,
+    "len": "32",
+    "seed": "0xd3ca4a728c93fb8b0bdd351ff8f182cbb74f8a154df38722a2e007799ec0e955"
+  },
+  "seed_tx2": {
+    "hash": "0xa61fb776f350258cee2e3763f22990cd282be7938ad8c43d91edf332c42ab87b",
+    "status": 1,
+    "gasUsed": "47136",
+    "confirmMs": 6764,
+    "mirrorLagMs": 932,
+    "chargedFeeTinybar": 5939136
+  },
+  "seed_tx2_result": {
+    "ok": true,
+    "len": "32",
+    "seed": "0x2dd3bd10d3a781cc55f27fcaadc1cc9467ac86f911ea9314a25efa8ca5f58287"
+  },
+  "seed_twice_same_tx": {
+    "hash": "0x0cd6466c726838d07d746a6cd4dc38167f7be1b6d2fa4bf2e2c7194c9e21edd4",
+    "status": 1,
+    "gasUsed": "64898",
+    "confirmMs": 6941,
+    "mirrorLagMs": 753,
+    "chargedFeeTinybar": 8177148
+  },
+  "seed_twice_values": [
+    "0xe720b2490eb6537b0a2360b71a0edf70dec32d16171d24ac3004375b1c26c5a5",
+    "0xe720b2490eb6537b0a2360b71a0edf70dec32d16171d24ac3004375b1c26c5a5"
+  ],
+  "origin_direct": true,
+  "origin_via_wrapper": false,
+  "codeSize_HALLMARK_ADDRESS": 23530,
+  "codeSize_JUDGE_ADDRESS": 2324,
+  "codeSize_REGISTRY_ADDRESS": 4256
+}

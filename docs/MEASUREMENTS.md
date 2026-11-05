@@ -1,8 +1,8 @@
 # Measurements
 
 Every number is tagged **measured**, **assumed** or **cited**, with the script that produced it.
-**Status (2026-11-06): nothing has been measured on Hedera or on the real models yet.** Gates G1 to G5 have not run,
-so every protocol parameter below is **assumed** and the model windows are illustrative only.
+**Status (2026-11-06): G2 measured on Hedera testnet; the models are not measured yet** (G3 not run), so every protocol
+parameter below is **assumed** and the model windows are illustrative only.
 
 ## Inputs to the core model (read by `pnpm simulate` and the web "Core model" page)
 
@@ -48,7 +48,18 @@ Replace each value with the G3 output (`docs/gates/G3.asr.json`, `docs/gates/G3.
 }
 ```
 
-## Measured so far (local only, not Hedera)
+## Measured on Hedera testnet
+
+| What | Value | Source |
+|---|---|---|
+| Effective gas price | 126 tinybar per reported gas unit (all G2 probe transactions) | measured: `scripts/probe-hedera.ts` → `docs/gates/G2.raw.json` |
+| Confirmation time (Hashio, `tx.wait()`) | 6.6-6.9 s | measured: G2 |
+| Mirror Node lag after confirmation | 0.6-0.9 s | measured: G2 |
+| Deploy gas | Judge 555,354 · Registry 1,000,134 · Hallmark 5,289,549 | measured: deployment receipts (`docs/DEPLOYMENTS.md`) |
+| Cost of deploying all three + linking | 8.68 HBAR | measured: deployer balance before/after |
+| Small call costs | probe calls of 28k-84k gas cost 0.035-0.106 HBAR | measured: G2 (`charged_tx_fee`) |
+
+## Measured locally (not Hedera)
 
 | What | Value | Source |
 |---|---|---|
@@ -63,6 +74,5 @@ Replace each value with the G3 output (`docs/gates/G3.asr.json`, `docs/gates/G3.
 | M2 | Catch rate pi and compute saved c' per cheat per task | `scripts/calibrate.ts` (G3) |
 | M3 | HBAR fee and gas per transaction type; chain cost per job (HBAR, USD) | `scripts/measure.ts` from `docs/e2e/testnet-*.json` |
 | M4 | Paid -> provisional and paid -> final latency | `scripts/e2e-testnet.ts` + `scripts/measure.ts` |
-| M5 | Hedera confirmation time, Mirror Node lag, PRNG and `tx.origin` behavior | `scripts/probe-hedera.ts` (G2) |
 | M6 | Cheats caught on testnet (reported honestly, including misses) | `scripts/measure.ts` |
 | M7 | Compute cost multiplier `1 + p` in practice | G3 timings × audit rate |

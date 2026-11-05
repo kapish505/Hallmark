@@ -19,4 +19,5 @@ Hashio); `registry.hallmark`, `hallmark.registry`, `hallmark.judge` all linked; 
 - **Gateway = the deployer for now.** Change it to the real gateway account with `Hallmark.setGateway(address)` (owner only).
 - **Params:** constructor defaults ([DEMO]/[ASSUMED]: auditBps 3000, minBond 0.1 HBAR, ...).
 - **Models: none registered.** `setModel` waits for measured G3 values; the gateway offers no task until then.
-- Not yet verified on Sourcify.
+- **Verified on Sourcify** (exact match) for all three, via `forge verify-contract --verifier sourcify --chain-id 296`.
+- G2 probe contracts: Probe `0x725D54A46B0000e1CDa4bB71Cc188F06291bdA46`, ProbeWrapper `0xA2d0972d3405a0042b02d05Ea141c48F54E64fa6` (test HBAR withdrawn).

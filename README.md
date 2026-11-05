@@ -4,7 +4,7 @@
 operator. A failed check slashes the operator and refunds the buyer.** Payments are x402 on Hedera; the escrow, bonds and
 record are Hedera smart contracts.
 
-> **Status (2026-11-06): contracts deployed to Hedera testnet; no model registered and no gate has run yet.** There is no
+> **Status (2026-11-06): contracts deployed and verified on Hedera testnet; G2 passed; no model registered, no paid job yet.** There is no
 > settled Hedera transaction id yet and no measured model numbers. Every protocol number below is tagged
 > **assumed** until gates G2 and G3 replace it. See [Honest status](#honest-status).
 
@@ -97,7 +97,8 @@ not measurements. `pnpm simulate --sweep` prints the window for other audit rate
 | Overlap gas, 96 × 96 words | 707,636 | measured, local EVM only |
 | Honest agreement s, fp, every pi and c' | not yet | G3 |
 | Pinned-model WER / CER | not yet | G3 + A2 |
-| Fee per job, gas per transaction, latency | not yet | G2, testnet e2e |
+| Gas price on testnet | 126 tinybar per gas unit; confirmation about 7 s | measured (G2) |
+| Fee per job, latency per job | not yet | testnet e2e |
 | Audit rate 30%, fees, minBond | defaults | assumed / [DEMO] |
 
 ## Add-ons (privacy and accuracy)
@@ -163,8 +164,8 @@ Agent: `pnpm agent clip.wav --gateway <url> --max-price 0.5 --budget 5 [--valida
 
 - Tests (local only): Foundry, Vitest and the full local e2e. Counts and results are in [docs/e2e/local-e2e.json](docs/e2e/local-e2e.json)
   and the summary at the end of this file.
-- **Not done:** any testnet transaction, G1 to G6, real model determinism and catch rates, the accuracy numbers, Sourcify
-  verification, the demo video, the S1 to S7 extras, canaries (A4), the private route (A5).
+- **Done on testnet:** deployment, Sourcify verification, G2 probe.
+- **Not done:** a paid x402 job, G1 payment, G3 to G6, real model determinism and catch rates, the accuracy numbers, the demo video, the S1 to S7 extras, canaries (A4), the private route (A5).
 - `lazy-small-model` and `lazy-engine` catch rates depend on the workload. The testnet e2e reports misses as misses.
 
 ## Prior art
@@ -192,7 +193,7 @@ written before the official kickoff. They are listed in [docs/DECISIONS.md](docs
 | ModelRegistry | [`0x252A9478e703524aFe022C407e6C61ee27633282`](https://hashscan.io/testnet/contract/0x252A9478e703524aFe022C407e6C61ee27633282) |
 | HallmarkJudge | [`0x883b674a9050bf8e1531116A3AA524b08983bd46`](https://hashscan.io/testnet/contract/0x883b674a9050bf8e1531116A3AA524b08983bd46) |
 
-Deployed 2026-11-06 (details and transactions: [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md)). Not yet verified on Sourcify.
+Deployed 2026-11-06 and verified on Sourcify (exact match); details and transactions: [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md).
 No models are registered yet (waiting for G3).
 
 ## Name
