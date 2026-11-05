@@ -1,0 +1,10 @@
+{
+  "language": "Solidity",
+  "settings": {
+    "optimizer": { "enabled": true, "runs": 50 },
+    "evmVersion": "paris",
+    "viaIR": true,
+    "remappings": ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/", "forge-std/=lib/forge-std/src/"],
+    "outputSelection": { "*": { "": ["ast"], "*": ["abi", "metadata", "devdoc", "userdoc", "storageLayout", "evm.legacyAssembly", "evm.bytecode", "evm.deployedBytecode", "evm.methodIdentifiers", "evm.gasEstimates", "evm.assembly"] } }
+  }
+}
