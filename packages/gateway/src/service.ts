@@ -63,7 +63,7 @@ const DESCRIPTION: Record<Task, string> = {
 /** Wire every gateway component. Tests and the local e2e inject the facilitator/refunder. */
 export async function buildGateway(
   env: GatewayEnv,
-  o: { facilitator: FacilitatorClient; facilitatorUrl: string; refunder?: Refunder; tryIt?: (t: Task, b: Uint8Array) => Promise<unknown> },
+  o: { facilitator: FacilitatorClient; facilitatorUrl: string; refunder?: Refunder },
 ) {
   const provider = new JsonRpcProvider(env.RPC_URL, env.CHAIN_ID, { staticNetwork: true });
   const wallet = new Wallet(env.GATEWAY_PRIVATE_KEY, provider);
@@ -120,7 +120,6 @@ export async function buildGateway(
     blobs,
     paymentMiddleware,
     tasks: () => tasks,
-    tryIt: o.tryIt,
     cfg: {
       publicUrl: env.PUBLIC_URL,
       payTo,

@@ -83,8 +83,6 @@ export interface AppDeps {
     /** extra readers of private evidence (add-on A1), lower-case addresses */
     watchers: string[];
   };
-  /** demo-sponsored "Try it" payer (optional, labelled in the UI) */
-  tryIt?: (task: Task, bytes: Uint8Array) => Promise<unknown>;
 }
 
 function rateLimit(perMin: number) {
@@ -466,16 +464,7 @@ export function createApp(d: AppDeps) {
     res.status(out.every((s) => s === 200) ? 200 : 502).json({ updated: urls.length, statuses: out });
   });
   app.get("/demo/operators", (_req, res) => res.json(Object.keys(cfg.operatorControl)));
-  app.post("/demo/try", demoAuth, upload.single("file"), async (req, res) => {
-    if (!d.tryIt) return void res.status(501).json({ error: "no demo buyer configured" });
-    const task = req.body?.task === "ocr" ? "ocr" : "asr";
-    if (!req.file) return void res.status(400).json({ error: "file required" });
-    try {
-      res.json(await d.tryIt(task, new Uint8Array(req.file.buffer)));
-    } catch (e) {
-      res.status(502).json({ error: String(e) });
-    }
-  });
+
 
   return app;
 }

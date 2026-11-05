@@ -46,6 +46,16 @@ repeated here. Each entry: what, and why.
 | P9 | **A2: `expectedErrorBps` and `errorSampleSize` added to the registry entry** (informational, emitted in `ModelSet`, shown in the manifest, result and UI). `calibrate.ts` reports corpus WER/CER with a bootstrap 95% interval. Values stay 0 ("not measured") until G3. | The add-on; no number is invented. |
 | P10 | **A4 (canaries) cut**, per the add-on's cut order. **A5 (private route) not built**: G6 needs a real TEE host and attestation verification, which were not available. Nothing about it is claimed. | No faking; label what did not ship. |
 
+## Real demo, user wallets (2026-11-06)
+
+| # | Decision | Why |
+|---|---|---|
+| R1 | **No sponsored buyer.** `/demo/try` and `DEMO_BUYER_*` were removed. Visitors pay from their own Hedera wallet; agents pay with their own key (CLI). | The team asked that testing be done by users themselves, with everything real. |
+| R2 | **Browser x402 payments via Hedera WalletConnect** (`@hashgraph/hedera-wallet-connect` 2.1.3, HashPack / Kabila / Blade). The web app implements the x402 `exact` Hedera client scheme itself: it builds the same `TransferTransaction` as `@x402/hedera`'s `createClientHederaSigner` (payer → payTo, transaction id from the facilitator's `feePayer`), has the **wallet** sign it, and sends `{ transaction: base64 }`. | `@x402/hedera`'s signer interface is just `createPartiallySignedTransferTransaction`; implementing it in the page avoids a second Hedera SDK in the bundle. MetaMask cannot sign Hedera-native transfers, so a Hedera wallet is required. |
+| R3 | **The page checks the 402 before the wallet is asked**: network, HBAR, `payTo` = manifest, amount = advertised price, and a per-call cap the user sets. | Same policy as the agent. |
+| R4 | **Demo pool on one server** (`docker-compose.prod.yml`): 5 operators + challenger + gateway run by the team, sharing the pinned worker containers; Caddy serves HTTPS. Disclosed in README and `DEPLOY.md`. | A hackathon demo needs a live pool; the protocol does not depend on who runs it. |
+| R5 | **Attack-lab controls stay token-protected** and only change the team's own operators; the payment, the chain and the models stay real. | So visitors can watch a slash happen on a job they paid for. |
+
 ## Process note (disclosure)
 
 - v1 of this codebase (TEE arbiters, tiers, canaries) was written **before the official kickoff**, at the team's request,

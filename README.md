@@ -10,6 +10,13 @@ record are Hedera smart contracts.
 
 Built for ETHGlobal Mumbai 2026, primary track: Hedera "AI Agents That Pay: x402 on Hedera".
 
+## Try it
+
+Open the web app, connect a **Hedera testnet wallet** (HashPack, Kabila or Blade), upload a short WAV or a PNG, and approve
+the HBAR transfer in your wallet. Everything is real: your wallet signs the x402 payment, the jobs run on the pinned models,
+and every step is a Hedera transaction you can open on HashScan. Agents can pay without a person via the CLI
+(`pnpm agent ...`). The demo pool is run by the team on one server (disclosed in [DEPLOY.md](DEPLOY.md)).
+
 ## The problem
 
 An agent paying per call for transcription or OCR has no way to know that the operator ran the model it advertised, instead

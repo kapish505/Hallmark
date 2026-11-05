@@ -37,7 +37,5 @@ export const GatewayEnv = ChainEnv.extend({
   /** "0xOperatorAddr=http://host:port,..." control endpoints of demo operators */
   OPERATOR_CONTROL_URLS: z.string().default(""),
   DEMO_CONTROL_TOKEN: z.string().optional(),
-  /** demo-sponsored "Try it" buyer (testnet only, labelled in the UI) */
-  DEMO_BUYER_PRIVATE_KEY: zEnv.hex32.optional(),
 });
 export type GatewayEnv = z.infer<typeof GatewayEnv>;

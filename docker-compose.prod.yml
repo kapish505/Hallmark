@@ -1,0 +1,46 @@
+# Full Hallmark stack on ONE x86_64 Linux server (the demo pool). Real chain, real payments, real models.
+# Disclosure: in this demo every operator is run by the team on this one host and they share the pinned
+# worker containers. That is a demo pool, not a decentralized network; the protocol does not depend on it.
+#   docker compose -f docker-compose.prod.yml --env-file deploy/.env up -d --build
+x-node: &node
+  build: { context: ., dockerfile: Dockerfile }
+  restart: unless-stopped
+  env_file: [env/common.env]
+  depends_on: [asr-worker, ocr-worker]
+  volumes: ["./data:/app/data"]
+
+services:
+  asr-worker:
+    build: ./packages/operator/worker/asr
+    restart: unless-stopped
+  ocr-worker:
+    build: ./packages/operator/worker/ocr
+    restart: unless-stopped
+
+  gateway:
+    <<: *node
+    env_file: [env/common.env, env/gateway.env]
+    command: ["npx", "tsx", "packages/gateway/src/main.ts"]
+    depends_on: []
+  operator-1: { <<: *node, env_file: [env/common.env, env/operator-1.env], command: ["npx", "tsx", "packages/operator/src/main.ts"] }
+  operator-2: { <<: *node, env_file: [env/common.env, env/operator-2.env], command: ["npx", "tsx", "packages/operator/src/main.ts"] }
+  operator-3: { <<: *node, env_file: [env/common.env, env/operator-3.env], command: ["npx", "tsx", "packages/operator/src/main.ts"] }
+  operator-4: { <<: *node, env_file: [env/common.env, env/operator-4.env], command: ["npx", "tsx", "packages/operator/src/main.ts"] }
+  operator-5: { <<: *node, env_file: [env/common.env, env/operator-5.env], command: ["npx", "tsx", "packages/operator/src/main.ts"] }
+  challenger: { <<: *node, env_file: [env/common.env, env/challenger.env], command: ["npx", "tsx", "packages/operator/src/challenger-main.ts"] }
+
+  web:
+    build:
+      context: .
+      dockerfile: web.Dockerfile
+      args:
+        VITE_GATEWAY_URL: https://${API_DOMAIN}
+        VITE_WALLETCONNECT_PROJECT_ID: ${WALLETCONNECT_PROJECT_ID}
+    restart: unless-stopped
+    environment: { DOMAIN: "${DOMAIN}", API_DOMAIN: "${API_DOMAIN}" }
+    ports: ["80:80", "443:443"]
+    volumes: ["caddy_data:/data"]
+    depends_on: [gateway]
+
+volumes:
+  caddy_data: {}

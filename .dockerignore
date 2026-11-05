@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+contracts/out
+contracts/cache
+contracts/lib
+contracts/broadcast
+data
+.git
+.env
+env/*.env
+docs/e2e

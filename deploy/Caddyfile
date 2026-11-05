@@ -1,0 +1,11 @@
+# HTTPS for the web app and the gateway (WalletConnect needs an HTTPS origin).
+# Set DOMAIN (web) and API_DOMAIN (gateway) in deploy/.env; point both DNS A records at the server.
+{$DOMAIN} {
+	root * /srv
+	try_files {path} /index.html
+	file_server
+}
+
+{$API_DOMAIN} {
+	reverse_proxy gateway:8787
+}

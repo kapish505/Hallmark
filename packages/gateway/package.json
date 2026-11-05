@@ -10,9 +10,7 @@
     "start": "tsx src/main.ts"
   },
   "dependencies": {
-    "@hallmark/buyer-agent": "workspace:*",
     "@hallmark/shared": "workspace:*",
-    
     "@x402/core": "2.28.0",
     "@x402/express": "2.28.0",
     "@x402/hedera": "2.28.0",

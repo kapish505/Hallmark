@@ -6,6 +6,7 @@ import { NetworkPage } from "./pages/Network";
 import { CoreModelPage } from "./pages/CoreModel";
 import { AttackPage } from "./pages/Attack";
 import { VerifyPage } from "./pages/Verify";
+import { WalletButton, WalletProvider } from "./WalletContext";
 
 const TABS = ["Try it", "Job", "Network", "Core model", "Attack lab", "Verify"] as const;
 type Tab = (typeof TABS)[number];
@@ -23,12 +24,14 @@ export function App() {
     setTab("Job");
   };
   return (
+    <WalletProvider>
     <div className="app">
       <header>
         <div className="brand">
           <span className="logo">◆</span> Hallmark
           <span className="sub">pay-per-request OCR and speech-to-text from bonded operators, checked by sampled re-runs</span>
         </div>
+        <WalletButton />
         <nav>
           {TABS.map((t) => (
             <button key={t} className={t === tab ? "tab active" : "tab"} onClick={() => setTab(t)}>
@@ -48,12 +51,13 @@ export function App() {
         )}
         {tab === "Network" && <NetworkPage />}
         {tab === "Core model" && <CoreModelPage />}
-        {tab === "Attack lab" && <AttackPage onJob={openJob} />}
+        {tab === "Attack lab" && <AttackPage />}
         {tab === "Verify" && <VerifyPage jobId={jobId} />}
       </main>
       <footer className="small muted">
         Testnet only · x402 payments on Hedera · shows fidelity to a pinned model, not truth · trust assumptions T1-T6 in the README
       </footer>
     </div>
+    </WalletProvider>
   );
 }

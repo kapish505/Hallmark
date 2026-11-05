@@ -31,6 +31,8 @@ const { values } = parseArgs({
     "fee-tinybar": { type: "string" },
     digest: { type: "string", default: "unrecorded" },
     "cheat-runs": { type: "string", default: "3" },
+    /** output file name under docs/gates (default G3.<task>.json) */
+    out: { type: "string" },
   },
 });
 const task = values.task as "asr" | "ocr";
@@ -252,7 +254,7 @@ const report = {
 };
 const dir = join(import.meta.dirname, "../docs/gates");
 mkdirSync(dir, { recursive: true });
-writeFileSync(join(dir, `G3.${task}.json`), JSON.stringify(report, null, 2) + "\n");
+writeFileSync(join(dir, values.out ?? `G3.${task}.json`), JSON.stringify(report, null, 2) + "\n");
 
 console.log(`\n## G3 ${task.toUpperCase()} (${inputs.length} inputs x ${runs} runs x ${workers.length} machines, image ${values.digest})`);
 console.log(`honest exact-hash agreement: ${(report.honest.exactAgreement * 100).toFixed(2)}% of ${comparisons} comparisons (cross-machine ${report.honest.crossMachineExactAgreement === null ? "n/a" : (report.honest.crossMachineExactAgreement * 100).toFixed(2) + "%"})`);
@@ -264,4 +266,4 @@ if (perInput.length) {
   console.log(`\naccuracy (A2): corpus ${accuracy.metric} ${(accuracy.corpusError * 100).toFixed(2)}% on ${perInput.length} inputs (${accuracy.referenceUnits} reference ${task === "asr" ? "words" : "characters"}), bootstrap 95% CI ${accuracy.ci95!.map((x) => (x * 100).toFixed(2) + "%").join(" - ")}`);
   console.log(`registry: ${task.toUpperCase()}_ERROR_BPS=${accuracy.registry.expectedErrorBps} ${task.toUpperCase()}_ERROR_N=${accuracy.registry.errorSampleSize}  -> copy into docs/ACCURACY.md`);
 }
-console.log(`\nwrote docs/gates/G3.${task}.json (${basename(values.data)})`);
+console.log(`\nwrote docs/gates/${values.out ?? `G3.${task}.json`} (${basename(values.data)})`);

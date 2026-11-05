@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "web", "runtimeExecutable": "pnpm", "runtimeArgs": ["--filter", "@hallmark/web", "dev", "--host", "127.0.0.1"], "port": 5173 }
+  ]
+}

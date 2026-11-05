@@ -11,3 +11,4 @@ contracts/broadcast/
 canaries/
 contracts/lib/
 .DS_Store
+deploy/.env
