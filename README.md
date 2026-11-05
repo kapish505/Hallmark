@@ -4,7 +4,7 @@
 operator. A failed check slashes the operator and refunds the buyer.** Payments are x402 on Hedera; the escrow, bonds and
 record are Hedera smart contracts.
 
-> **Status (2026-11-06): built and tested locally; nothing is deployed and no gate has run on testnet.** There is no
+> **Status (2026-11-06): contracts deployed to Hedera testnet; no model registered and no gate has run yet.** There is no
 > settled Hedera transaction id yet and no measured model numbers. Every protocol number below is tagged
 > **assumed** until gates G2 and G3 replace it. See [Honest status](#honest-status).
 
@@ -184,9 +184,16 @@ Other model types (LLMs, image, video), canary jobs, a TEE private route, zk pro
 See [AI_USAGE.md](AI_USAGE.md) and [THIRD_PARTY.md](THIRD_PARTY.md). Parts of the code were carried over from a prototype
 written before the official kickoff. They are listed in [docs/DECISIONS.md](docs/DECISIONS.md#process-note-disclosure).
 
-## Contracts
+## Contracts (Hedera testnet, chain 296)
 
-Not deployed. Addresses go here after deployment (verified on Sourcify).
+| Contract | Address |
+|---|---|
+| Hallmark | [`0xb719b79bdEfcaE9fD981ebc9b545419645FAd1c4`](https://hashscan.io/testnet/contract/0xb719b79bdEfcaE9fD981ebc9b545419645FAd1c4) |
+| ModelRegistry | [`0x252A9478e703524aFe022C407e6C61ee27633282`](https://hashscan.io/testnet/contract/0x252A9478e703524aFe022C407e6C61ee27633282) |
+| HallmarkJudge | [`0x883b674a9050bf8e1531116A3AA524b08983bd46`](https://hashscan.io/testnet/contract/0x883b674a9050bf8e1531116A3AA524b08983bd46) |
+
+Deployed 2026-11-06 (details and transactions: [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md)). Not yet verified on Sourcify.
+No models are registered yet (waiting for G3).
 
 ## Name
 
