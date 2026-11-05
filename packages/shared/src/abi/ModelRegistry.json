@@ -1,0 +1,598 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "owner_",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "EXACT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_WORDS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TOLERANCE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "get",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ModelRegistry.Model",
+        "components": [
+          {
+            "name": "class",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tauBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "normSpec",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "minWords",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxWords",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "enabled",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "piBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "fpBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "runtimeDigest",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "hwClass",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "fee",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "cTinybar",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "marginTinybar",
+            "type": "uint128",
+            "internalType": "uint128"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "hallmark",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IHallmarkParams"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "modelCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "modelIds",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setHallmark",
+    "inputs": [
+      {
+        "name": "h",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setModel",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "m",
+        "type": "tuple",
+        "internalType": "struct ModelRegistry.Model",
+        "components": [
+          {
+            "name": "class",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tauBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "normSpec",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "minWords",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxWords",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "enabled",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "piBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "fpBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "runtimeDigest",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "hwClass",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "fee",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "cTinybar",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "marginTinybar",
+            "type": "uint128",
+            "internalType": "uint128"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "window",
+    "inputs": [
+      {
+        "name": "m",
+        "type": "tuple",
+        "internalType": "struct ModelRegistry.Model",
+        "components": [
+          {
+            "name": "class",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tauBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "normSpec",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "minWords",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxWords",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "enabled",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "piBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "fpBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "runtimeDigest",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "hwClass",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "fee",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "cTinybar",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "marginTinybar",
+            "type": "uint128",
+            "internalType": "uint128"
+          }
+        ]
+      },
+      {
+        "name": "auditBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minBond",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "b",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "ceil",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "event",
+    "name": "HallmarkSet",
+    "inputs": [
+      {
+        "name": "hallmark",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ModelSet",
+    "inputs": [
+      {
+        "name": "modelId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "model",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct ModelRegistry.Model",
+        "components": [
+          {
+            "name": "class",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tauBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "normSpec",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "minWords",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxWords",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "enabled",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "piBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "fpBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "runtimeDigest",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "hwClass",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "fee",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "cTinybar",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "marginTinybar",
+            "type": "uint128",
+            "internalType": "uint128"
+          }
+        ]
+      },
+      {
+        "name": "bond",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "ceiling",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AlreadySet",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadModel",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "HallmarkNotSet",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "WindowEmpty",
+    "inputs": [
+      {
+        "name": "bond",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "ceiling",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  }
+]

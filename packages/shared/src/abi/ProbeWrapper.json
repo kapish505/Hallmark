@@ -1,0 +1,21 @@
+[
+  {
+    "type": "function",
+    "name": "callOrigin",
+    "inputs": [
+      {
+        "name": "p",
+        "type": "address",
+        "internalType": "contract Probe"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  }
+]

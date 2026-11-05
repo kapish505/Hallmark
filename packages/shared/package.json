@@ -1,0 +1,11 @@
+{
+  "name": "@hallmark/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./abi/*": "./src/abi/*" },
+  "dependencies": {
+    "ethers": "6.13.1",
+    "zod": "3.23.8"
+  }
+}

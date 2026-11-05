@@ -1,0 +1,86 @@
+[
+  {
+    "type": "function",
+    "name": "check",
+    "inputs": [
+      {
+        "name": "text",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "spec",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "words",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "overlap",
+    "inputs": [
+      {
+        "name": "a",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "b",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "error",
+    "name": "BadChar",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "BadSpacing",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadSpec",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TooLong",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TooManyWords",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TooManyWords",
+    "inputs": []
+  }
+]

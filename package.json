@@ -1,0 +1,41 @@
+{
+  "name": "hallmark",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:contracts": "cd contracts && forge test",
+    "gen:abi": "tsx scripts/gen-abi.ts",
+    "e2e:local": "tsx scripts/local/e2e-local.ts",
+    "gateway": "tsx --env-file=env/common.env --env-file=${ENV_FILE:-env/gateway.env} packages/gateway/src/main.ts",
+    "challenger": "tsx --env-file=env/common.env --env-file=${ENV_FILE:-env/challenger.env} packages/operator/src/challenger-main.ts",
+    "agent": "tsx --env-file=env/common.env --env-file=${ENV_FILE:-env/agent.env} packages/buyer-agent/src/cli.ts",
+    "verify": "tsx --env-file=env/common.env --env-file=${ENV_FILE:-env/agent.env} packages/verifier/src/cli.ts",
+    "simulate": "tsx packages/simulator/src/cli.ts",
+    "web": "pnpm --filter @hallmark/web dev",
+    "gen:vectors": "tsx scripts/gen-vectors.ts",
+    "probe:facilitators": "tsx scripts/probe-facilitators.ts",
+    "probe:hedera": "tsx scripts/probe-hedera.ts",
+    "calibrate": "tsx scripts/calibrate.ts",
+    "e2e:testnet": "tsx scripts/e2e-testnet.ts",
+    "measure": "tsx scripts/measure.ts",
+    "operator": "tsx --env-file=env/common.env --env-file=${ENV_FILE:-env/operator.env} packages/operator/src/main.ts",
+    "setup:contracts": "sh contracts/install-deps.sh"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "@x402/core": "2.28.0",
+    "@x402/fetch": "2.28.0",
+    "ethers": "6.13.1",
+    "tsx": "4.19.2",
+    "typescript": "5.7.2",
+    "vitest": "2.1.8",
+    "zod": "3.23.8"
+  },
+  "version": "0.2.0"
+}
