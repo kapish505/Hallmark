@@ -51,9 +51,11 @@ const OCR_TEXT = [
   "Order 1187 shipped via ground service today",
   "EXIT ONLY - KEEP CLEAR - FIRE LANE",
 ];
+/** a sentence plus an input-specific number, so different inputs never share a transcript */
 export const textFor = (task: Task, input: Uint8Array) => {
   const list = task === "asr" ? ASR_TEXT : OCR_TEXT;
-  return list[Number(BigInt(keccak256(input)) % BigInt(list.length))];
+  const h = BigInt(keccak256(input));
+  return `${list[Number(h % BigInt(list.length))]} ${(h >> 8n) % 100000n}`;
 };
 
 /** Deterministic stand-in for the pinned workers; cheap options give visibly different output. */

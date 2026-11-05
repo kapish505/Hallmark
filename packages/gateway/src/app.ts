@@ -359,13 +359,18 @@ export function createApp(d: AppDeps) {
     if (!cfg.demoMode || !cfg.demoControlToken || req.headers.authorization !== `Bearer ${cfg.demoControlToken}`) return void res.status(401).json({ error: "demo control disabled or bad token" });
     next();
   };
+  /** {operator, behavior, role?} or {operator: "all", reset: true} */
   app.post("/demo/behavior", express.json(), demoAuth, async (req, res) => {
+    const reset = req.body?.reset === true;
     const b = OperatorBehavior.safeParse(req.body?.behavior);
-    const url = cfg.operatorControl[String(req.body?.operator ?? "").toLowerCase()];
-    if (!b.success || !url) return void res.status(400).json({ error: "operator with a control URL and a valid behavior required" });
-    const r = await fetch(`${url}/behavior`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.demoControlToken}` }, body: JSON.stringify({ behavior: b.data }) });
-    res.status(r.status).json(await r.json());
+    const target = String(req.body?.operator ?? "").toLowerCase();
+    const urls = target === "all" ? Object.values(cfg.operatorControl) : [cfg.operatorControl[target]].filter(Boolean);
+    if ((!reset && !b.success) || !urls.length) return void res.status(400).json({ error: "operator (or \"all\") with a control URL and a valid behavior required" });
+    const body = JSON.stringify(reset ? { reset: true } : { behavior: b.data, role: Number(req.body?.role ?? 0) });
+    const out = await Promise.all(urls.map((u) => fetch(`${u}/behavior`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.demoControlToken}` }, body }).then((r) => r.status)));
+    res.status(out.every((s) => s === 200) ? 200 : 502).json({ updated: urls.length, statuses: out });
   });
+  app.get("/demo/operators", (_req, res) => res.json(Object.keys(cfg.operatorControl)));
   app.post("/demo/try", demoAuth, upload.single("file"), async (req, res) => {
     if (!d.tryIt) return void res.status(501).json({ error: "no demo buyer configured" });
     const task = req.body?.task === "ocr" ? "ocr" : "asr";
