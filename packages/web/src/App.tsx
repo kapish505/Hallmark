@@ -12,7 +12,7 @@ const TABS = ["Try it", "Job", "Network", "Core model", "Attack lab", "Verify"] 
 type Tab = (typeof TABS)[number];
 
 export function App() {
-  const [tab, setTab] = useState<Tab>("Try it");
+  const [tab, setTab] = useState<Tab>(() => (location.hash === "#verify" ? "Verify" : "Try it"));
   const [jobId, setJobId] = useState(() => new URLSearchParams(location.search).get("job") ?? "");
   const [token, setToken] = useState(() => new URLSearchParams(location.search).get("token") ?? "");
   useEffect(() => {
@@ -27,10 +27,13 @@ export function App() {
     <WalletProvider>
     <div className="app">
       <header>
-        <div className="brand">
-          <span className="logo">◆</span> Hallmark
-          <span className="sub">pay-per-request OCR and speech-to-text from bonded operators, checked by sampled re-runs</span>
-        </div>
+        <a className="brand" href="/">
+          <svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true" style={{ color: "var(--brass)" }}>
+            <path d="M9 8v16M23 8v16M9 16h14" stroke="currentColor" strokeWidth="2.4" />
+            <rect x="5" y="5" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1" />
+          </svg>
+          Hallmark <span className="sub">console</span>
+        </a>
         <WalletButton />
         <nav>
           {TABS.map((t) => (

@@ -1,0 +1,33 @@
+/* One system for the landing page and the console. Sharp radius (developer / fintech tool). */
+:root {
+  --ink: #0d0d0b;
+  --ink-2: #151513;
+  --ink-3: #1d1d1a;
+  --line: #2a2925;
+  --line-2: #3a3833;
+  --paper: #ecebe4;
+  --paper-dim: #a9a79d;
+  --paper-mute: #75736b;
+  --brass: #c8a96a;
+  --brass-dim: #8c7546;
+  --ok: #7fb38f;
+  --warn: #d4a24c;
+  --bad: #d9796c;
+  --serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --wrap: 1180px;
+  --gutter: clamp(16px, 4vw, 40px);
+  --m-in: 140ms;
+  --m-out: 200ms;
+  --m-press: 90ms;
+  --m-cycle: 3.2s;
+  --m-ease: cubic-bezier(.2, .8, .2, 1);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--ink); color: var(--paper); font: 400 16px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+::selection { background: var(--brass); color: var(--ink); }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
