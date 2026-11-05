@@ -196,6 +196,17 @@ Not deployed. Addresses go here after deployment (verified on Sourcify).
 
 _to fill in_
 
-## Local test summary
+## Local test summary (2026-11-06, local only: not testnet evidence, not measurements)
 
-_filled in below by the last local run_
+- **Foundry 47/47**: lifecycle and every revert path, salted commitments (dictionary test, wrong salt), wrapper-contract
+  re-roll blocked, invariants (conservation, escrow = open jobs, locked = operators' locked, terminal is final), reentrancy,
+  normalization and overlap fuzz, TS to Solidity parity vectors (96 normalization, 60 overlap, 60 bond cases).
+- **Vitest 51/51**: normalization, bond math, units, validators (including adversarial input), spend policy, gateway x402 flow on
+  anvil (replay x20, no-store, settle failure, createJob revert to refund, private evidence, validator whitelist, 503 before
+  payment), operator crash recovery and wrong-salt refusal.
+- **Local e2e 25/25** (`pnpm e2e:local`, anvil + fake facilitator + fake workers): honest ASR and OCR, validators (pass, and fail
+  with no money effect), audited agree, garbage, replay-other-input, lazy-small-model, truncate, silent, no-reveal, tolerance
+  honest variation, tolerance garbage, verifier no-show, inconclusive refund, collusion + challenge, false challenge, no capacity,
+  payment replay x20, and the independent verifier on six jobs. Contract balance equals accounted liabilities.
+  In the recorded run, the collusion scenario drew **both** colluders as executor and verifier, so the fake settled and the
+  challenger lost its bond: the s² residual risk of T2, shown as it happened.
