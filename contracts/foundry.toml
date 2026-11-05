@@ -1,0 +1,24 @@
+[profile.default]
+src = "src"
+test = "test"
+script = "script"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.24"
+evm_version = "paris"   # G2 tests shanghai/cancun on Hedera; keep paris unless proven
+optimizer = true
+optimizer_runs = 50     # D19: deployment size over runtime gas
+via_ir = true          # D-v2-3: the full lifecycle fits under 24,576 B only with via-IR (23.1 KB)
+remappings = ["forge-std/=lib/forge-std/src/", "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"]
+fs_permissions = [{ access = "read", path = "./test" }]
+
+[fuzz]
+runs = 512
+
+[invariant]
+runs = 64
+depth = 300
+fail_on_revert = false
+
+[rpc_endpoints]
+hedera_testnet = "https://testnet.hashio.io/api"

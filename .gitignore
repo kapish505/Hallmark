@@ -1,0 +1,13 @@
+node_modules/
+.env
+env/*.env
+!env/*.env.example
+data/
+packages/web/.env
+packages/web/dist/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+canaries/
+contracts/lib/
+.DS_Store
