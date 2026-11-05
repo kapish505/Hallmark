@@ -1,0 +1,168 @@
+{
+  "task": "asr",
+  "ranAt": "2026-11-05T23:51:14.083Z",
+  "imageDigest": "local-arm64:sha256:df010ef9f1f9ba40c2b52f0fe7dae528668d3dbd331805ad3165b604e1ccdcde",
+  "workers": [
+    {
+      "url": "http://localhost:9000",
+      "health": {
+        "ok": true,
+        "task": "asr",
+        "model": "large-v3",
+        "device": "cpu",
+        "compute_type": "int8",
+        "cpu_threads": 4,
+        "decode": {
+          "beam_size": "1",
+          "best_of": "1",
+          "temperature": "[0.0]",
+          "compression_ratio_threshold": "None",
+          "log_prob_threshold": "None",
+          "no_speech_threshold": "None",
+          "condition_on_previous_text": "False",
+          "vad_filter": "False",
+          "without_timestamps": "True",
+          "language": "en"
+        }
+      }
+    }
+  ],
+  "inputs": 8,
+  "runsPerMachine": 8,
+  "honest": {
+    "comparisons": 224,
+    "exactAgreement": 1,
+    "crossMachineComparisons": 0,
+    "crossMachineExactAgreement": null,
+    "overlapMinBps": 10000,
+    "overlapP01Bps": 10000,
+    "fpByTau": {
+      "6000": 0,
+      "6500": 0,
+      "7000": 0,
+      "7500": 0,
+      "8000": 0,
+      "8500": 0,
+      "9000": 0,
+      "9500": 0,
+      "10000": 0
+    }
+  },
+  "decision": {
+    "class": "EXACT",
+    "tauBps": 0,
+    "fpBps": 0,
+    "worstCheatPiBps": 1250
+  },
+  "cheats": [
+    {
+      "cheat": "empty",
+      "piBps": 10000,
+      "savedFraction": 1,
+      "cTinybar": "15000000",
+      "cProvenance": "assumed (time ratio x --honest-cost-tinybar)"
+    },
+    {
+      "cheat": "garbage",
+      "piBps": 10000,
+      "savedFraction": 1,
+      "cTinybar": "15000000",
+      "cProvenance": "assumed (time ratio x --honest-cost-tinybar)"
+    },
+    {
+      "cheat": "replay-other-input",
+      "piBps": 10000,
+      "savedFraction": 1,
+      "cTinybar": "15000000",
+      "cProvenance": "assumed (time ratio x --honest-cost-tinybar)"
+    },
+    {
+      "cheat": "model-tiny",
+      "piBps": 6250,
+      "savedFraction": 0.961,
+      "cTinybar": "14415000",
+      "cProvenance": "assumed (time ratio x --honest-cost-tinybar)"
+    },
+    {
+      "cheat": "model-base",
+      "piBps": 2500,
+      "savedFraction": 0.92,
+      "cTinybar": "13800000",
+      "cProvenance": "assumed (time ratio x --honest-cost-tinybar)"
+    },
+    {
+      "cheat": "model-small",
+      "piBps": 1250,
+      "savedFraction": 0.748,
+      "cTinybar": "11220000",
+      "cProvenance": "assumed (time ratio x --honest-cost-tinybar)"
+    },
+    {
+      "cheat": "truncate-60pct",
+      "piBps": 10000,
+      "savedFraction": 0.4,
+      "cTinybar": "6000000",
+      "cProvenance": "assumed (time ratio x --honest-cost-tinybar)"
+    }
+  ],
+  "accuracy": {
+    "metric": "WER",
+    "normalization": "NORM_ASR_V1",
+    "inputsWithReference": 8,
+    "inputsWithoutReference": 0,
+    "referenceUnits": 91,
+    "corpusError": 0.06593406593406594,
+    "ci95": [
+      0.020833333333333332,
+      0.13793103448275862
+    ],
+    "perInput": [
+      {
+        "input": "clip1.wav",
+        "errors": 1,
+        "length": 12
+      },
+      {
+        "input": "clip2.wav",
+        "errors": 0,
+        "length": 12
+      },
+      {
+        "input": "clip3.wav",
+        "errors": 3,
+        "length": 10
+      },
+      {
+        "input": "clip4.wav",
+        "errors": 0,
+        "length": 13
+      },
+      {
+        "input": "clip5.wav",
+        "errors": 1,
+        "length": 11
+      },
+      {
+        "input": "clip6.wav",
+        "errors": 1,
+        "length": 11
+      },
+      {
+        "input": "clip7.wav",
+        "errors": 0,
+        "length": 11
+      },
+      {
+        "input": "clip8.wav",
+        "errors": 0,
+        "length": 11
+      }
+    ],
+    "registry": {
+      "expectedErrorBps": 659,
+      "errorSampleSize": 8
+    },
+    "limits": "describes the pinned model on this small test set, not any single job; not a guarantee"
+  },
+  "provenance": "measured (this script, real pinned workers); cTinybar is assumed"
+}
