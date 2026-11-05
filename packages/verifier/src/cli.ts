@@ -5,8 +5,10 @@ import { DEFAULTS, loadEnv, zEnv } from "@hallmark/shared";
 import { verifyJob } from "./verify.js";
 
 const jobId = process.argv[2];
+const tokenIdx = process.argv.indexOf("--token");
+const token = tokenIdx > 0 ? process.argv[tokenIdx + 1] : process.env.BUYER_ACCESS_TOKEN;
 if (!jobId || !/^0x[0-9a-fA-F]{64}$/.test(jobId)) {
-  console.error("usage: hallmark-verify <jobId>");
+  console.error("usage: hallmark-verify <jobId> [--token <buyer access token>]  (without a token the text checks are skipped)");
   process.exit(2);
 }
 const env = loadEnv(
@@ -20,7 +22,7 @@ const env = loadEnv(
   }),
 );
 const provider = new JsonRpcProvider(env.RPC_URL, env.CHAIN_ID, { staticNetwork: true });
-const results = await verifyJob(jobId, { provider, addresses: env, gatewayUrl: env.GATEWAY_URL.replace(/\/$/, "") });
+const results = await verifyJob(jobId, { provider, addresses: env, gatewayUrl: env.GATEWAY_URL.replace(/\/$/, ""), token });
 for (const r of results) console.log(`${r.result.padEnd(4)}  ${r.name}${r.detail ? `  (${r.detail})` : ""}`);
 const failed = results.filter((r) => r.result === "FAIL").length;
 console.log(failed ? `\n${failed} check(s) FAILED` : "\nall checks passed");

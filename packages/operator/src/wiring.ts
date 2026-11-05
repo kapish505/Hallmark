@@ -34,7 +34,7 @@ export async function wire(
     source,
     worker: new HttpWorker(urls),
     tasks: Object.keys(urls) as Task[],
-    evidence: new EvidenceClient(evidenceBase),
+    evidence: new EvidenceClient(evidenceBase, wallet),
     evidenceBase,
   };
 }

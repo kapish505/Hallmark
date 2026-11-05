@@ -10,6 +10,11 @@ import {
   checkPng,
   commitment,
   COMMIT_DOMAIN,
+  outCommitOf,
+  parseValidator,
+  runValidator,
+  saltCommitOf,
+  ValidatorError,
   deterrenceBond,
   fairnessCeiling,
   formatHbar,
@@ -54,9 +59,13 @@ describe("NORM_ASR_V1 (spec 1)", () => {
   });
 });
 
-describe("NORM_OCR_V1 (spec 2)", () => {
-  it("drops apostrophes and punctuation; splits on whitespace - / _", () => {
-    expect(normalize("TOTAL: $42.50 it's", 2).text).toBe("total 4250 its");
+describe("NORM_OCR_V1B (spec 2)", () => {
+  it("keeps . and , only between digits; drops other punctuation; splits on whitespace - / _", () => {
+    expect(normalize("TOTAL: $42.50 it's", 2).text).toBe("total 42.50 its");
+    expect(normalize("1,200.00. end.", 2).text).toBe("1,200.00 end");
+    expect(normalize("a.b 4 .5", 2).text).toBe("ab 4 5");
+    expect(validate("42.50 1,200", 2)).toBe(2);
+    expect(() => validate("4.", 2)).toThrow(NormError);
     expect(normalize("a/b_c-d", 2).text).toBe("a b c d");
     expect(normalize("it’s", 2).text).toBe("its");
   });
@@ -144,9 +153,17 @@ describe("ids and commitments", () => {
     expect(jobIdFor(h, "pay-1")).not.toBe(jobIdFor(h, "pay-2"));
   });
   it("commitment encodes the Solidity tuple", () => {
-    const p = { chainId: 296, core: "0x" + "11".repeat(20), jobId: "0x" + "22".repeat(32), who: "0x" + "33".repeat(20), outputHash: "0x" + "44".repeat(32), salt: "0x" + "55".repeat(32) };
-    const enc = AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address", "bytes32", "address", "bytes32", "bytes32"], [COMMIT_DOMAIN, 296, p.core, p.jobId, p.who, p.outputHash, p.salt]);
+    const p = { chainId: 296, core: "0x" + "11".repeat(20), jobId: "0x" + "22".repeat(32), who: "0x" + "33".repeat(20), outCommit: "0x" + "44".repeat(32), commitSalt: "0x" + "55".repeat(32) };
+    const enc = AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address", "bytes32", "address", "bytes32", "bytes32"], [COMMIT_DOMAIN, 296, p.core, p.jobId, p.who, p.outCommit, p.commitSalt]);
     expect(commitment(p)).toBe(keccak256(enc));
+  });
+  it("outCommit is salted: a guessed text cannot be tested without the job salt (edge case 31)", () => {
+    const base = { chainId: 296, core: "0x" + "11".repeat(20), jobId: "0x" + "22".repeat(32), text: "yes" };
+    const a = outCommitOf({ ...base, jobSalt: "0x" + "01".repeat(32) });
+    expect(a).not.toBe(keccak256(new TextEncoder().encode("yes")));
+    expect(a).not.toBe(outCommitOf({ ...base, jobSalt: "0x" + "02".repeat(32) }));
+    expect(a).toBe(outCommitOf({ ...base, jobSalt: "0x" + "01".repeat(32) }));
+    expect(saltCommitOf("0x" + "01".repeat(32))).toBe(keccak256("0x" + "01".repeat(32)));
   });
 });
 
@@ -171,6 +188,42 @@ describe("badges", () => {
     expect(b("Refunded", true, false, true)).toBe("slashed");
     expect(b("Refunded")).toBe("refunded");
     expect(b("CommitteeCommit")).toBe("disputed");
+  });
+});
+
+describe("validators (add-on A3)", () => {
+  it("parses only the whitelist", () => {
+    expect(parseValidator(undefined)).toEqual({ name: "none" });
+    expect(parseValidator("min_words:5")).toEqual({ name: "min_words", arg: 5 });
+    for (const bad of ["eval:1", "min_words:-1", "min_words:99999", "x".repeat(100), "min_words:1e3"]) expect(() => parseValidator(bad)).toThrow(ValidatorError);
+  });
+  it("min_words, date_iso, amount_present", () => {
+    expect(runValidator({ name: "min_words", arg: 3 }, "a b c")).toBe("pass");
+    expect(runValidator({ name: "min_words", arg: 4 }, "a b c")).toBe("fail");
+    expect(runValidator({ name: "date_iso" }, "due 2026-02-28 ok")).toBe("pass");
+    expect(runValidator({ name: "date_iso" }, "due 2026-02-30")).toBe("fail");
+    expect(runValidator({ name: "date_iso" }, "12026-02-28")).toBe("fail");
+    expect(runValidator({ name: "amount_present" }, "pay $42.50")).toBe("pass");
+    expect(runValidator({ name: "amount_present" }, "pay 42")).toBe("fail");
+    expect(runValidator({ name: "none" }, "x")).toBe("n/a");
+  });
+  it("invoice_total: items add up to the total within 0.01", () => {
+    const inv = "Coffee 3.50\nBagel 2.25\nJuice 1,004.25\nSubtotal 1,010.00\nTOTAL 1,010.00";
+    expect(runValidator({ name: "invoice_total" }, inv)).toBe("pass");
+    expect(runValidator({ name: "invoice_total" }, inv.replace("TOTAL 1,010.00", "TOTAL 1,011.00"))).toBe("fail");
+    expect(runValidator({ name: "invoice_total" }, "no amounts here")).toBe("n/a");
+  });
+  it("adversarial input is bounded: huge strings return n/a quickly (edge case 36)", () => {
+    const huge = "1".repeat(1_000_000);
+    const t0 = Date.now();
+    expect(runValidator({ name: "invoice_total" }, huge)).toBe("n/a");
+    expect(runValidator({ name: "amount_present" }, "9".repeat(8000))).toBe("fail");
+    expect(runValidator({ name: "date_iso" }, "2026-".repeat(1600))).toBe("fail");
+    expect(runValidator({ name: "invoice_total" }, ("total 1.00 ").repeat(700))).toMatch(/n\/a|pass|fail/);
+    expect(Date.now() - t0).toBeLessThan(1000);
+  });
+  it("an honest output that fails a validator only reports fail (edge case 35: no money effect)", () => {
+    expect(runValidator({ name: "date_iso" }, "the quick brown fox")).toBe("fail");
   });
 });
 

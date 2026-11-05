@@ -14,11 +14,16 @@ const STEPS: Array<{ key: string; label: string; done: (j: JobView, ev: Set<stri
   { key: "end", label: "Settled / refunded", done: (j) => j.final },
 ];
 
-export function JobPage({ jobId }: { jobId: string }) {
+export function JobPage({ jobId, token }: { jobId: string; token: string }) {
   const qc = useQueryClient();
   const valid = /^0x[0-9a-fA-F]{64}$/.test(jobId);
   const job = useQuery({ queryKey: ["job", jobId], queryFn: () => getJson<JobView>(`/v1/jobs/${jobId}`), enabled: valid, refetchInterval: 5000 });
-  const result = useQuery({ queryKey: ["result", jobId], queryFn: () => getJson<{ text?: string; provisional?: boolean; error?: string }>(`/v1/jobs/${jobId}/result`), enabled: valid, refetchInterval: 5000 });
+  const result = useQuery({
+    queryKey: ["result", jobId, token],
+    queryFn: () => getJson<{ text?: string; provisional?: boolean; error?: string; validated?: string; validator?: string; accuracy?: { label: string } }>(`/v1/jobs/${jobId}/result?token=${token}`),
+    enabled: valid && !!token,
+    refetchInterval: 5000,
+  });
   useEffect(() => {
     if (!valid || !GATEWAY) return;
     const es = new EventSource(`${GATEWAY}/v1/jobs/${jobId}/events`);
@@ -55,10 +60,16 @@ export function JobPage({ jobId }: { jobId: string }) {
         {result.data?.text !== undefined ? (
           <>
             <p className="transcript">"{result.data.text}"</p>
-            <p className="small muted">{result.data.provisional ? "Provisional: the challenge window or the audit is still open." : "Final."} Shows fidelity to the pinned model, not that the text is true.</p>
+            <p className="small muted">{result.data.provisional ? "Provisional: the challenge window or the audit is still open." : "Final."} Faithful to the pinned model ({result.data.accuracy?.label ?? "error rate not measured yet"}); not a guarantee that the text is correct.</p>
+            {result.data.validator && result.data.validator !== "none" && (
+              <p className="small">
+                Validator <span className="mono">{result.data.validator}</span>: <b className={result.data.validated === "pass" ? "ok" : result.data.validated === "fail" ? "warn" : "muted"}>{result.data.validated}</b>{" "}
+                <span className="muted">(advisory, no money effect)</span>
+              </p>
+            )}
           </>
         ) : (
-          <p className="muted">{result.data?.error ?? "Not available yet."}</p>
+          <p className="muted">{!token ? "The result is private: open this page with the buyer's access token (?token=...)." : (result.data?.error ?? "Not available yet.")}</p>
         )}
       </div>
       <div className="grid2">

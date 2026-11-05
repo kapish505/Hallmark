@@ -9,6 +9,7 @@ import {
   HBAR_ASSET,
   Manifest,
   JobAccepted,
+  outCommitOf,
   readJob,
   type Task,
   X402_NETWORK,
@@ -32,6 +33,15 @@ export interface TaskResult {
   payment: { transaction: string | null; link: string | null; amountTinybar: string };
   inputHashOnChain: string | null;
   inputHashMatches: boolean | null;
+  /** the delivered text, with the job salt, opens the executor's on-chain outCommit (add-on A1) */
+  commitmentMatches: boolean | null;
+  /** advisory buyer validator (add-on A3): no money effect */
+  validator: string;
+  validated: "pass" | "fail" | "n/a";
+  /** add-on A2, e.g. "pinned model, measured error 4.1% on 120 samples" */
+  accuracy: string | null;
+  /** bearer capability for this job's result and evidence (keep it private) */
+  accessToken: string;
   txLinks: Array<{ name: string; link: string | null }>;
   refund?: unknown;
 }
@@ -49,6 +59,8 @@ export interface RunOpts {
   /** accept-provisional: return once an (unaudited, bond-backed) result exists; require-final: wait for settlement */
   mode?: "accept-provisional" | "require-final";
   timeoutMs?: number;
+  /** advisory validator from the gateway's whitelist (none, min_words:<n>, date_iso, amount_present, invoice_total) */
+  validator?: string;
 }
 
 /**
@@ -124,6 +136,7 @@ export class HallmarkAgent {
 
     const form = new FormData();
     form.append("file", new Blob([input]), opts.filename ?? (task === "asr" ? "clip.wav" : "image.png"));
+    if (opts.validator) form.append("validator", opts.validator);
     this.lastRefusal = null;
     let res: Response;
     try {
@@ -150,12 +163,15 @@ export class HallmarkAgent {
     for (;;) {
       if (Date.now() > deadline) throw new Error(`timed out waiting for job ${acc.jobId}`);
       if (!chainHash) chainHash = await this.onChainInputHash(acc.jobId, m);
-      const r = await fetch(acc.resultUrl);
+      const r = await fetch(acc.resultUrl, { headers: { Authorization: `Bearer ${acc.accessToken}` } });
       const body = (await r.json().catch(() => ({}))) as Record<string, unknown>;
       const done = r.status === 410 || r.status === 404 || (r.status === 200 && (mode === "accept-provisional" || body.final === true));
       if (done) {
         const job = (await fetch(acc.statusUrl).then((x) => x.json())) as { events: Array<{ name: string; link: string | null }>; status: string };
         if (!chainHash) chainHash = await this.onChainInputHash(acc.jobId, m);
+        const commitmentMatches = typeof body.text === "string" && typeof body.jobSalt === "string" ? await this.checkCommitment(acc.jobId, m, body.text, body.jobSalt) : null;
+        if (commitmentMatches === false) log.error("delivered text does NOT open the executor's on-chain commitment", { jobId: acc.jobId });
+        const acc2 = body.accuracy as { label?: string } | undefined;
         return {
           jobId: acc.jobId,
           task,
@@ -167,11 +183,31 @@ export class HallmarkAgent {
           payment: { transaction: settle?.transaction ?? null, link: settle ? hashscanTx(hs, settle.transaction) : null, amountTinybar: price.toString() },
           inputHashOnChain: chainHash,
           inputHashMatches: chainHash ? chainHash.toLowerCase() === localHash.toLowerCase() : null,
+          commitmentMatches,
+          validator: acc.validator,
+          validated: (body.validated as "pass" | "fail" | "n/a") ?? "n/a",
+          accuracy: acc2?.label ?? null,
+          accessToken: acc.accessToken,
           txLinks: job.events.map((e) => ({ name: e.name, link: e.link })),
           refund: r.status === 410 ? body : undefined,
         };
       }
       await sleep(2000);
+    }
+  }
+
+  /** add-on A1: recompute outCommit from the delivered text and the salt; compare with the chain. */
+  private async checkCommitment(jobId: string, m: Manifest, text: string, jobSalt: string): Promise<boolean | null> {
+    try {
+      const provider = new JsonRpcProvider(this.o.rpcUrl ?? DEFAULTS.rpcUrl, m.chainId, { staticNetwork: true });
+      const core = new Contract(m.contract, abis.Hallmark, provider);
+      const j = await readJob(core, jobId);
+      if (keccak256(jobSalt).toLowerCase() !== j.saltCommit.toLowerCase()) return false;
+      const seat = await core.seat(jobId, j.executor);
+      if (!seat.revealed) return null;
+      return outCommitOf({ chainId: m.chainId, core: m.contract, jobId, jobSalt, text }).toLowerCase() === String(seat.outCommit).toLowerCase();
+    } catch {
+      return null;
     }
   }
 

@@ -9,6 +9,7 @@ const { values, positionals } = parseArgs({
   options: {
     gateway: { type: "string", default: process.env.GATEWAY_URL },
     task: { type: "string" },
+    validator: { type: "string" },
     "max-price": { type: "string", default: process.env.AGENT_MAX_PRICE_HBAR },
     budget: { type: "string", default: process.env.AGENT_BUDGET_HBAR },
     "allow-pay-to": { type: "string", default: process.env.AGENT_ALLOWED_PAY_TO },
@@ -19,7 +20,7 @@ const { values, positionals } = parseArgs({
 });
 
 const usage = `usage: hallmark-agent <input.wav|input.png> --gateway URL --max-price HBAR --budget HBAR
-       [--task asr|ocr] [--require-final | --accept-provisional]
+       [--task asr|ocr] [--require-final | --accept-provisional] [--validator min_words:5|date_iso|amount_present|invoice_total]
 env: BUYER_ACCOUNT_ID, BUYER_PRIVATE_KEY (ECDSA, testnet)`;
 const file = positionals[0];
 if (!file || !values.gateway || !values["max-price"] || !values.budget) {
@@ -54,6 +55,7 @@ try {
   const r = await agent.run(task, new Uint8Array(readFileSync(file)), {
     filename: file.split("/").pop(),
     mode: values["require-final"] ? "require-final" : "accept-provisional",
+    validator: values.validator,
   });
   console.log(JSON.stringify(r, null, 2));
 } catch (e) {

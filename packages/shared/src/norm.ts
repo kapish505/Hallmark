@@ -6,8 +6,9 @@ import { keccak256 } from "ethers";
  *
  *  NORM_ASR_V1 (spec 1): lowercase; U+2018/U+2019 -> "'"; keep [a-z0-9']; word separators are
  *      whitespace and '-'; other ASCII punctuation is dropped without separating; single spaces; trim.
- *  NORM_OCR_V1 (spec 2): lowercase; keep [a-z0-9]; whitespace, '-', '/', '_' separate words; other
- *      ASCII punctuation (including apostrophes) is dropped; single spaces; trim.
+ *  NORM_OCR_V1B (spec 2): lowercase; keep [a-z0-9]; keep '.' and ',' only BETWEEN two digits (amounts
+ *      such as 42.50 and 1,200 survive; add-on A3, adopted before G3); whitespace, '-', '/', '_' separate
+ *      words; other ASCII punctuation (including apostrophes) is dropped; single spaces; trim.
  *  Both: any other non-ASCII code point is REJECTED (NormError "BadChar"): inputs are restricted to
  *      ASCII text (G3 data rules), and an operator that gets a BadChar output refuses the job input.
  *  Limits: MAX_BYTES 1024, MAX_WORDS 96, raw input MAX_RAW_BYTES 4096.
@@ -15,9 +16,9 @@ import { keccak256 } from "ethers";
 export const MAX_BYTES = 1024;
 export const MAX_WORDS = 96;
 export const MAX_RAW_BYTES = 4096;
-export const NORM = { ASR_V1: 1, OCR_V1: 2 } as const;
+export const NORM = { ASR_V1: 1, OCR_V1B: 2 } as const;
 export type NormSpec = 1 | 2;
-export const NORM_NAME: Record<NormSpec, string> = { 1: "NORM_ASR_V1", 2: "NORM_OCR_V1" };
+export const NORM_NAME: Record<NormSpec, string> = { 1: "NORM_ASR_V1", 2: "NORM_OCR_V1B" };
 
 export class NormError extends Error {
   constructor(
@@ -57,7 +58,9 @@ export function normalize(input: string | Uint8Array, spec: NormSpec): { text: s
       i += 3;
     } else {
       if (c >= 0x41 && c <= 0x5a) c += 32;
+      const isDigit = (x: number | undefined) => x !== undefined && x >= 0x30 && x <= 0x39;
       if (isWordChar(c, spec)) w = c;
+      else if (spec === 2 && (c === 0x2e || c === 0x2c) && !pendingSpace && isDigit(out[out.length - 1]) && isDigit(raw[i + 1])) w = c;
       else if (isSeparator(c, spec) && out.length > 0) pendingSpace = true;
       i += 1;
     }
@@ -89,7 +92,7 @@ export function validate(input: string | Uint8Array, spec: NormSpec): number {
     if (c === 0x20) {
       if (prevSpace) throw new NormError("BadSpacing", `double or leading space at ${i}`);
       prevSpace = true;
-    } else if (isWordChar(c, spec)) {
+    } else if (isWordChar(c, spec) || (spec === 2 && (c === 0x2e || c === 0x2c) && i > 0 && i + 1 < s.length && s[i - 1] >= 0x30 && s[i - 1] <= 0x39 && s[i + 1] >= 0x30 && s[i + 1] <= 0x39)) {
       if (prevSpace) {
         words += 1;
         prevSpace = false;

@@ -67,22 +67,40 @@ export type Contracts = ReturnType<typeof connect>;
 
 export const COMMIT_DOMAIN = keccak256(new TextEncoder().encode("HALLMARK_COMMIT_V2"));
 
-/** Off-chain twin of Hallmark.commitmentFor. */
+export const OUT_DOMAIN = keccak256(new TextEncoder().encode("HALLMARK_OUT_V1"));
+
+/** Off-chain twin of Hallmark.commitmentFor: an operator's blinded commitment to its outCommit. */
 export function commitment(p: {
   chainId: number | bigint;
   core: string;
   jobId: string;
   who: string;
-  outputHash: string;
-  salt: string;
+  outCommit: string;
+  commitSalt: string;
 }): string {
   return keccak256(
     AbiCoder.defaultAbiCoder().encode(
       ["bytes32", "uint256", "address", "bytes32", "address", "bytes32", "bytes32"],
-      [COMMIT_DOMAIN, p.chainId, p.core, p.jobId, p.who, p.outputHash, p.salt],
+      [COMMIT_DOMAIN, p.chainId, p.core, p.jobId, p.who, p.outCommit, p.commitSalt],
     ),
   );
 }
+
+/**
+ * Off-chain twin of Hallmark.outCommitFor (add-on A1): the salted output commitment that replaces a
+ * plain text hash everywhere on chain. Without jobSalt a guessed text cannot be tested against it.
+ */
+export function outCommitOf(p: { chainId: number | bigint; core: string; jobId: string; jobSalt: string; text: string }): string {
+  return keccak256(
+    AbiCoder.defaultAbiCoder().encode(
+      ["bytes32", "uint256", "address", "bytes32", "bytes32", "bytes"],
+      [OUT_DOMAIN, p.chainId, p.core, p.jobId, p.jobSalt, new TextEncoder().encode(p.text)],
+    ),
+  );
+}
+
+/** saltCommit = keccak256(jobSalt) as stored in the job; operators check it before working. */
+export const saltCommitOf = (jobSalt: string) => keccak256(jobSalt);
 
 /** Model key -> on-chain model id (keccak256 of the UTF-8 key, e.g. "ASR_V1"). */
 export const modelIdOf = (key: string) => keccak256(new TextEncoder().encode(key));
@@ -111,6 +129,7 @@ export interface JobView {
   createdAt: number;
   modelId: string;
   inputHash: string;
+  saltCommit: string;
   fee: bigint;
   protocolFee: bigint;
   auditFee: bigint;
@@ -144,6 +163,7 @@ export async function readJob(core: Contract, jobId: string): Promise<JobView> {
     createdAt: Number(j.createdAt),
     modelId: j.modelId,
     inputHash: j.inputHash,
+    saltCommit: j.saltCommit,
     fee: BigInt(j.fee),
     protocolFee: BigInt(j.protocolFee),
     auditFee: BigInt(j.auditFee),

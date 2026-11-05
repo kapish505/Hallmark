@@ -13,7 +13,7 @@ export function NetworkPage() {
         <div className="card">
           <h3>Tasks</h3>
           <table className="small">
-            <thead><tr><th>Task</th><th>Price</th><th>Bond</th><th>Class</th><th /></tr></thead>
+            <thead><tr><th>Task</th><th>Price</th><th>Bond</th><th>Class</th><th>Pinned-model error</th><th /></tr></thead>
             <tbody>
               {n.tasks.map((t) => (
                 <tr key={t.task}>
@@ -21,6 +21,7 @@ export function NetworkPage() {
                   <td>{tinybarToHbar(t.priceTinybar)}</td>
                   <td>{tinybarToHbar(t.bondTinybar)}</td>
                   <td>{t.cls === 1 ? `TOLERANCE (tau ${t.tauBps} bps)` : "EXACT"}</td>
+                  <td>{t.errorSampleSize ? `${(t.expectedErrorBps / 100).toFixed(1)}% ${t.task === "asr" ? "WER" : "CER"} on ${t.errorSampleSize}` : <span className="muted">not measured</span>}</td>
                   <td>{t.available ? <span className="ok">available</span> : <span className="bad">no capacity</span>}</td>
                 </tr>
               ))}

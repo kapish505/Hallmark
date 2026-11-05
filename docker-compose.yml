@@ -1,0 +1,10 @@
+# Pinned inference workers (one container per task). Build once, pin the base images by digest, and
+# record each resulting image digest in ModelRegistry.runtimeDigest. Every honest operator runs the
+# same digest on the same hardware/OS class (G3).
+services:
+  asr-worker:
+    build: ./packages/operator/worker/asr
+    ports: ["9000:9000"]
+  ocr-worker:
+    build: ./packages/operator/worker/ocr
+    ports: ["9001:9001"]

@@ -42,7 +42,7 @@ import { FakeClientScheme, FakeFacilitator, FakeWorker } from "./fakes.js";
 const N_OPS = 6;
 const STAKE = 10n ** 15n; // [LOCAL] wei == "tinybar" on anvil
 const PRICE_CAP = 10n ** 9n;
-const results: Array<{ name: string; pass: boolean; seconds: number; detail: string; jobId?: string }> = [];
+const results: Array<{ name: string; pass: boolean; seconds: number; detail: string; jobId?: string; token?: string }> = [];
 type Beh = Partial<Record<number, OperatorBehavior>>;
 
 async function main() {
@@ -75,6 +75,7 @@ async function main() {
     BLOB_DIR: join(dir, "blobs"),
     RATE_LIMIT_PER_MIN: "100000",
     PUBLIC_URL: base,
+    EVIDENCE_WATCHERS: addr(keys.challenger), // add-on A1: the challenger may read private evidence
   });
 
   // ---------------------------------------------------------------- operators
@@ -94,7 +95,7 @@ async function main() {
       wallet,
       source: source(),
       worker: workers[i],
-      evidence: new EvidenceClient(base),
+      evidence: new EvidenceClient(base, wallet),
       evidenceBase: base,
       pending: new PendingStore(sdir),
       state: new StateFile(join(sdir, "state.json")),
@@ -127,7 +128,7 @@ async function main() {
     sender: new TxSender(chWallet, { defaultGasLimit: 3_000_000 }),
     source: source(),
     worker: new FakeWorker(),
-    evidence: new EvidenceClient(base),
+    evidence: new EvidenceClient(base, chWallet),
     units: "evm",
     budgetTinybar: 10n ** 12n,
     marginBps: 0,
@@ -164,7 +165,7 @@ async function main() {
   const only = process.env.E2E_ONLY?.split(",");
   async function scenario(
     name: string,
-    o: { task?: Task; audit: number; setup?: () => Promise<void> | void; teardown?: () => Promise<void> | void; mode?: "require-final" | "accept-provisional"; during?: (jobId: Promise<string>) => Promise<void> },
+    o: { task?: Task; audit: number; setup?: () => Promise<void> | void; teardown?: () => Promise<void> | void; mode?: "require-final" | "accept-provisional"; validator?: string },
     check: (r: TaskResult | Error) => Promise<string>,
   ) {
     if (only && !only.includes(name)) return;
@@ -175,7 +176,7 @@ async function main() {
     await o.setup?.();
     let r: TaskResult | Error;
     try {
-      const p = agent.run(o.task ?? "asr", nextInput(o.task ?? "asr"), { mode: o.mode ?? "require-final", timeoutMs: 300_000 });
+      const p = agent.run(o.task ?? "asr", nextInput(o.task ?? "asr"), { mode: o.mode ?? "require-final", timeoutMs: 300_000, validator: o.validator });
       r = await p;
     } catch (e) {
       r = e as Error;
@@ -190,7 +191,7 @@ async function main() {
     }
     await o.teardown?.();
     const secs = (Date.now() - t0) / 1000;
-    results.push({ name, pass, seconds: secs, detail, jobId: r instanceof Error ? undefined : r.jobId });
+    results.push({ name, pass, seconds: secs, detail, jobId: r instanceof Error ? undefined : r.jobId, token: r instanceof Error ? undefined : r.accessToken });
     console.log(`${pass ? "PASS" : "FAIL"} e2e:${name} (${secs.toFixed(1)} s) - ${detail}`);
   }
   const allRole = (role: number, b: OperatorBehavior) => beh.forEach((x) => (x[role] = b));
@@ -203,8 +204,25 @@ async function main() {
     ok(r.badge === "provisional (unaudited, bond-backed)", `badge ${r.badge}`);
     ok(r.inputHashMatches === true, "on-chain inputHash matches our input (T1)");
     ok(r.text && r.text === normalize(r.text, 1).text, "normalized text returned");
+    ok(r.commitmentMatches === true, "delivered text opens the executor's salted on-chain commitment (A1)");
     ok((await wrongSlashed(r.jobId)).length === 0, "nobody slashed");
-    return `"${r.text}" settled unaudited; payment ${r.payment.transaction}`;
+    // A1: nothing public lets a third party test the text
+    const pub = await fetch(`${base}/v1/jobs/${r.jobId}`).then((x) => x.text());
+    ok(!pub.includes(r.text!) && (await fetch(`${base}/v1/jobs/${r.jobId}/result`)).status === 403, "text and result are not public");
+    return `"${r.text}" settled unaudited; commitment checked by the buyer; payment ${r.payment.transaction}`;
+  });
+
+  await scenario("validator-pass", { audit: 1, validator: "min_words:3" }, async (r0) => {
+    const r = res(r0);
+    ok(r.validated === "pass" && r.status === "Settled", `${r.validated} ${r.status}`);
+    return "min_words:3 -> pass (advisory)";
+  });
+
+  await scenario("validator-fail-no-money-effect", { audit: 1, validator: "date_iso" }, async (r0) => {
+    const r = res(r0);
+    ok(r.validated === "fail", `validated ${r.validated}`);
+    ok(r.status === "Settled" && (await wrongSlashed(r.jobId)).length === 0, "settled, nobody slashed, no refund (edge case 35)");
+    return "date_iso failed on an honest transcript: reported only; executor paid, buyer not refunded";
   });
 
   await scenario("honest-ocr", { task: "ocr", audit: 1 }, async (r0) => {
@@ -289,6 +307,7 @@ async function main() {
     let pass = false;
     let detail = "";
     let jobId: string | undefined;
+    let collusionToken: string | undefined;
     beh.forEach((b) => Object.keys(b).forEach((k) => delete b[Number(k)]));
     workers.forEach((w) => (w.jitter = ""));
     await setAudit(1);
@@ -301,6 +320,7 @@ async function main() {
         const e = opIndex(j.executor);
         if (e !== 0 && e !== 1) continue; // honest executor: nothing to catch
         jobId = r.jobId;
+        collusionToken = r.accessToken;
         const ev = await eventsOf(r.jobId);
         ok(ev.some((x) => x.name === "Challenged"), "challenger challenged the unaudited fake");
         const v = opIndex(j.verifier);
@@ -317,7 +337,7 @@ async function main() {
     } catch (e) {
       detail = String(e instanceof Error ? e.message : e);
     }
-    results.push({ name: "collude-challenge", pass, seconds: (Date.now() - t0) / 1000, detail, jobId });
+    results.push({ name: "collude-challenge", pass, seconds: (Date.now() - t0) / 1000, detail, jobId, token: collusionToken });
     console.log(`${pass ? "PASS" : "FAIL"} e2e:collude-challenge - ${detail}`);
   }
 
@@ -428,7 +448,7 @@ async function main() {
 
   // ---------------------------------------------------------------- independent verifier
   for (const r of results.filter((x) => x.jobId && ["honest", "audited-agree", "garbage", "tolerance-garbage", "tolerance-honest-variation", "collude-challenge"].includes(x.name))) {
-    const checks = await verifyJob(r.jobId!, { provider, addresses: dep, gatewayUrl: base });
+    const checks = await verifyJob(r.jobId!, { provider, addresses: dep, gatewayUrl: base, token: r.token });
     const failed = checks.filter((c) => c.result === "FAIL");
     const detail = checks.map((c) => `${c.result} ${c.name}`).join("; ");
     results.push({ name: `verify:${r.name}`, pass: failed.length === 0 && checks.length > 0, seconds: 0, detail, jobId: r.jobId });

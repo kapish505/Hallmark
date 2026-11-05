@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import type { ChildProcess } from "node:child_process";
-import { JsonRpcProvider, NonceManager, Wallet } from "ethers";
+import { JsonRpcProvider, NonceManager, Wallet, keccak256 } from "ethers";
 import { x402Client } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
-import { connect, loadEnv, modelIdOf, outputUploadMessage, sleep } from "@hallmark/shared";
+import { connect, loadEnv, modelIdOf, outCommitOf, outputUploadMessage, readMessage, saltCommitOf, sleep } from "@hallmark/shared";
 import { buildGateway, GatewayEnv } from "../src/index.js";
 import { ASR_KEY, deployAll, devKey, OCR_KEY, startAnvil, synthPng, synthWav, type Deployment } from "../../../scripts/local/chain.js";
 import { FakeClientScheme, FakeFacilitator } from "../../../scripts/local/fakes.js";
@@ -146,7 +146,7 @@ describe("gateway x402 flow", () => {
   });
 
   it("job and result responses are not cacheable", async () => {
-    for (const path of [`/v1/jobs/${firstJob}`, `/v1/jobs/${firstJob}/result`]) {
+    for (const path of [`/v1/jobs/${firstJob}`, `/v1/jobs/${firstJob}/result?token=${gw.db.job(firstJob)!.access_token}`]) {
       const r = await fetch(`${base}${path}`);
       expect(r.headers.get("cache-control")).toMatch(/no-store/);
       expect(r.headers.get("vary")).toMatch(/PAYMENT-SIGNATURE/);
@@ -204,17 +204,60 @@ describe("gateway x402 flow", () => {
     }
   });
 
+  it("add-on A1: salt, input and result are private; the buyer token unlocks them", async () => {
+    const row = gw.db.job(firstJob)!;
+    for (const path of ["/salt", "/input", "/result", `/outputs/${new Wallet(devKey(2)).address}`]) {
+      expect((await fetch(`${base}/v1/jobs/${firstJob}${path}`)).status).toBe(403);
+    }
+    // a signed request from an address with no role on this job is refused too
+    const stranger = new Wallet(devKey(15));
+    const ts = Math.floor(Date.now() / 1000);
+    const sig = await stranger.signMessage(readMessage(firstJob, stranger.address, ts));
+    const h = { "X-Hallmark-Address": stranger.address, "X-Hallmark-Timestamp": String(ts), "X-Hallmark-Signature": sig };
+    expect((await fetch(`${base}/v1/jobs/${firstJob}/salt`, { headers: h })).status).toBe(403);
+    // the executor (holds a role) may read the salt
+    const j = await gw.contracts.core.getJob(firstJob);
+    const exec = new Wallet([2, 3, 4, 5, 6].map(devKey).find((k) => new Wallet(k).address === j.executor)!);
+    const sig2 = await exec.signMessage(readMessage(firstJob, exec.address, ts));
+    const s2 = await fetch(`${base}/v1/jobs/${firstJob}/salt`, { headers: { "X-Hallmark-Address": exec.address, "X-Hallmark-Timestamp": String(ts), "X-Hallmark-Signature": sig2 } });
+    expect(s2.status).toBe(200);
+    const { jobSalt } = await s2.json();
+    expect(saltCommitOf(jobSalt)).toBe(j.saltCommit);
+    // the buyer token works and the salt is never in the public view
+    const auth = { Authorization: `Bearer ${row.access_token}` };
+    expect((await fetch(`${base}/v1/jobs/${firstJob}/input`, { headers: auth })).status).toBe(200);
+    const pub = await fetch(`${base}/v1/jobs/${firstJob}`).then((r) => r.text());
+    expect(pub).not.toContain(jobSalt.slice(2));
+    expect(pub).not.toContain(row.access_token);
+  });
+
   it("evidence store: rejects unsigned, mismatched or unrevealed output uploads", async () => {
     const op = new Wallet(devKey(2));
-    const body = (o: Partial<{ text: string; outputHash: string; signature: string }>) => ({ jobId: firstJob, operator: op.address, outputHash: "0x" + "00".repeat(32), text: "hello", signature: "0x", ...o });
-    const put = (b: unknown) => fetch(`${base}/outputs/${firstJob}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
-    expect((await put(body({ signature: "0x" + "11".repeat(65) }))).status).toBeGreaterThanOrEqual(400);
-    const { outputHashOf } = await import("@hallmark/shared");
-    const h = outputHashOf("hello");
-    const sig = await op.signMessage(outputUploadMessage({ jobId: firstJob, operator: op.address, outputHash: h }));
-    expect((await put(body({ outputHash: h, text: "other", signature: sig }))).status).toBe(400);
-    expect((await put(body({ outputHash: h, signature: sig }))).status).toBe(409); // no revealed seat
-    expect((await fetch(`${base}/inputs/${(await gw.contracts.core.getJob(firstJob)).inputHash}`)).status).toBe(200);
+    const put = (b: unknown) => fetch(`${base}/v1/jobs/${firstJob}/outputs`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
+    const row = gw.db.job(firstJob)!;
+    const oc = outCommitOf({ chainId: 31337, core: dep.HALLMARK_ADDRESS, jobId: firstJob, jobSalt: row.job_salt, text: "hello" });
+    const rawHash = keccak256(new TextEncoder().encode(""));
+    const sig = await op.signMessage(outputUploadMessage({ jobId: firstJob, operator: op.address, outCommit: oc, rawHash }));
+    expect((await put({ jobId: firstJob, operator: op.address, outCommit: oc, text: "hello", signature: "0x" + "11".repeat(65) })).status).toBeGreaterThanOrEqual(400);
+    expect((await put({ jobId: firstJob, operator: op.address, outCommit: oc, text: "other", signature: sig })).status).toBe(400);
+    expect((await put({ jobId: firstJob, operator: op.address, outCommit: oc, text: "hello", signature: sig })).status).toBe(409); // no revealed seat
+  });
+
+  it("add-on A3: a validator outside the whitelist is rejected before settlement", async () => {
+    const before = facilitator.settled.length;
+    const f = form(synthWav(2, 650));
+    f.append("validator", "invoice_total");
+    const r = await paidFetch()(`${base}/v1/transcribe`, { method: "POST", body: f });
+    expect(r.status).toBe(400); // invoice_total is OCR-only
+    const g = form(synthWav(2, 651));
+    g.append("validator", "rm -rf");
+    expect((await paidFetch()(`${base}/v1/transcribe`, { method: "POST", body: g })).status).toBe(400);
+    expect(facilitator.settled.length).toBe(before);
+    const ok = form(synthWav(2, 652));
+    ok.append("validator", "min_words:2");
+    const r2 = await paidFetch()(`${base}/v1/transcribe`, { method: "POST", body: ok });
+    expect(r2.status).toBe(202);
+    expect((await r2.json()).validator).toBe("min_words:2");
   });
 
   it("edge case 4: not enough eligible operators -> 503 before payment", async () => {

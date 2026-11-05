@@ -40,6 +40,19 @@
   },
   {
     "type": "function",
+    "name": "OUT_DOMAIN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "accounted",
     "inputs": [],
     "outputs": [
@@ -136,12 +149,12 @@
         "internalType": "address"
       },
       {
-        "name": "outputHash",
+        "name": "outCommit",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "salt",
+        "name": "commitSalt",
         "type": "bytes32",
         "internalType": "bytes32"
       }
@@ -192,6 +205,11 @@
         "name": "textV",
         "type": "bytes",
         "internalType": "bytes"
+      },
+      {
+        "name": "jobSalt",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [],
@@ -213,6 +231,11 @@
       },
       {
         "name": "inputHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "saltCommit",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -497,6 +520,11 @@
             "internalType": "bytes32"
           },
           {
+            "name": "saltCommit",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
             "name": "fee",
             "type": "uint128",
             "internalType": "uint128"
@@ -718,6 +746,35 @@
   },
   {
     "type": "function",
+    "name": "outCommitFor",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "jobSalt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "text",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "owner",
     "inputs": [],
     "outputs": [
@@ -742,6 +799,11 @@
         "name": "text",
         "type": "bytes",
         "internalType": "bytes"
+      },
+      {
+        "name": "jobSalt",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [],
@@ -821,6 +883,11 @@
         "name": "texts",
         "type": "bytes[]",
         "internalType": "bytes[]"
+      },
+      {
+        "name": "jobSalt",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [],
@@ -836,12 +903,12 @@
         "internalType": "bytes32"
       },
       {
-        "name": "outputHash",
+        "name": "outCommit",
         "type": "bytes32",
         "internalType": "bytes32"
       },
       {
-        "name": "salt",
+        "name": "commitSalt",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -869,7 +936,12 @@
         "internalType": "bytes"
       },
       {
-        "name": "salt",
+        "name": "jobSalt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "commitSalt",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -909,7 +981,7 @@
             "internalType": "bytes32"
           },
           {
-            "name": "outputHash",
+            "name": "outCommit",
             "type": "bytes32",
             "internalType": "bytes32"
           },
@@ -1610,7 +1682,7 @@
         "internalType": "uint8"
       },
       {
-        "name": "outputHash",
+        "name": "outCommit",
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"
@@ -1780,6 +1852,11 @@
   {
     "type": "error",
     "name": "BadReveal",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BadSalt",
     "inputs": []
   },
   {

@@ -5,8 +5,9 @@ import {
   logger,
   ModelClass,
   NormError,
-  outputHashOf,
+  outCommitOf,
   readJob,
+  saltCommitOf,
   Role,
   Status,
   toWire,
@@ -150,13 +151,19 @@ export class Operator {
         return;
       }
       const behavior = this.d.behavior(role, jobId);
-      const input = await this.d.evidence.input(j.inputHash); // throws on hash mismatch (edge case 22)
+      // add-on A1 / edge case 29: the gateway cannot hand different salts to different operators
+      const jobSalt = await this.d.evidence.salt(jobId);
+      if (saltCommitOf(jobSalt).toLowerCase() !== j.saltCommit.toLowerCase()) {
+        this.log.error("job salt does not match the on-chain saltCommit; refusing the job", { jobId, role });
+        return;
+      }
+      const input = await this.d.evidence.input(jobId, j.inputHash); // throws on hash mismatch (edge case 22)
       const lastKey = `lastHonest:${task}`;
       const last = this.d.state.get(lastKey);
       const other = last ? (JSON.parse(last) as { inputHash: string; output: string }) : null;
-      let output: string | null;
+      let produced: Awaited<ReturnType<typeof produceOutput>>;
       try {
-        output = await produceOutput(
+        produced = await produceOutput(
           behavior,
           {
             jobId,
@@ -172,20 +179,22 @@ export class Operator {
         this.log.error("could not produce a valid output; not committing", { jobId, error: e instanceof NormError ? `${e.code}: ${e.message}` : String(e) });
         return;
       }
-      if (output === null) {
+      if (produced === null) {
         this.log.warn("behavior=silent: not committing", { jobId, role });
         return;
       }
+      const output = produced.text;
       const words = validate(output, j.normSpec as NormSpec);
       if (words < j.minWords || words > j.maxWords) {
         this.log.error("output word count outside model bounds; not committing", { jobId, words });
         return;
       }
-      const salt = hexlify(randomBytes(32));
-      const outputHash = outputHashOf(output);
-      const c = commitment({ chainId: this.d.chainId, core: await this.d.contracts.core.getAddress(), jobId, who: this.address, outputHash, salt });
+      const commitSalt = hexlify(randomBytes(32));
+      const core = await this.d.contracts.core.getAddress();
+      const outCommit = outCommitOf({ chainId: this.d.chainId, core, jobId, jobSalt, text: output });
+      const c = commitment({ chainId: this.d.chainId, core, jobId, who: this.address, outCommit, commitSalt });
       // persist BEFORE the commit transaction exists
-      this.d.pending.save({ jobId, role, task, output, salt, outputHash, commitment: c, behavior, committed: false, revealed: false, textPosted: false, uploaded: false });
+      this.d.pending.save({ jobId, role, task, output, raw: produced.raw, jobSalt, commitSalt, outCommit, commitment: c, behavior, committed: false, revealed: false, textPosted: false, uploaded: false });
       if (behavior === "honest") this.d.state.set(lastKey, JSON.stringify({ inputHash: j.inputHash, output }));
       this.log.info("output ready", { jobId, role, task, behavior, words });
       await this.advance(jobId);
@@ -220,7 +229,7 @@ export class Operator {
     const isE = r.role === Role.Executor && this.me(j.executor);
     const isV = r.role === Role.Verifier && this.me(j.verifier);
     const isM = r.role === Role.Member && Number(s.role) === Role.Member;
-    const ref = evidenceRef(this.d.evidenceBase, r.outputHash);
+    const ref = evidenceRef(this.d.evidenceBase, jobId, this.address);
 
     const commitTurn =
       (j.status === Status.Assigned && isE) || (j.status === Status.VerifierCommit && isV) || (j.status === Status.CommitteeCommit && isM && s.bondHeld);
@@ -238,9 +247,9 @@ export class Operator {
         return;
       }
       if (j.status === Status.CommitteeReveal && j.cls === ModelClass.TOLERANCE) {
-        await this.d.sender.send(core, "revealText", [jobId, toUtf8Bytes(r.output), r.salt, ref], { gasLimit: this.d.gasLimitHeavy, label: "revealText" });
+        await this.d.sender.send(core, "revealText", [jobId, toUtf8Bytes(r.output), r.jobSalt, r.commitSalt, ref], { gasLimit: this.d.gasLimitHeavy, label: "revealText" });
       } else {
-        await this.d.sender.send(core, "reveal", [jobId, r.outputHash, r.salt, ref], { gasLimit: this.d.gasLimit, label: "reveal" });
+        await this.d.sender.send(core, "reveal", [jobId, r.outCommit, r.commitSalt, ref], { gasLimit: this.d.gasLimit, label: "reveal" });
       }
       this.save(r, { committed: true, revealed: true });
       this.log.info("revealed", { jobId, role: r.role });
@@ -249,7 +258,7 @@ export class Operator {
     }
 
     if (j.status === Status.Text && (isE || isV) && !s.textPosted && r.behavior !== "no-reveal") {
-      await this.d.sender.send(core, "postText", [jobId, toUtf8Bytes(r.output)], { gasLimit: this.d.gasLimitHeavy, label: "postText" });
+      await this.d.sender.send(core, "postText", [jobId, toUtf8Bytes(r.output), r.jobSalt], { gasLimit: this.d.gasLimitHeavy, label: "postText" });
       this.save(r, { textPosted: true });
       this.log.info("posted text", { jobId, role: r.role });
     }
@@ -260,7 +269,7 @@ export class Operator {
   private async uploadIfNeeded(r: PendingRecord) {
     if (!r.revealed || r.uploaded) return;
     try {
-      await this.d.evidence.upload(this.d.wallet, r.jobId, r.outputHash, r.output);
+      await this.d.evidence.upload(this.d.wallet, r.jobId, r.outCommit, r.output, r.raw);
       this.save(r, { uploaded: true });
     } catch (e) {
       this.warn("evidence upload failed (will retry)", r.jobId, e);

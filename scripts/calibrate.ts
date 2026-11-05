@@ -6,7 +6,8 @@
  *   tsx scripts/calibrate.ts --task ocr --data data/g3/ocr --workers http://m1:9001,http://m2:9001 ...
  *
  * --data holds the inputs (ASR: 16 kHz mono PCM16 .wav, 8-15 s; OCR: .png, <= 96 words of ASCII text)
- * and optionally <name>.ref.txt human transcripts (used only for WER/CER, never for the class decision).
+ * and <name>.ref.txt HUMAN-CHECKED reference texts (add-on A2: accuracy report; never used for the
+ * class decision). Reference texts go through the same production normalization as outputs.
  * Each worker URL must be a DIFFERENT machine running the SAME image digest (record it with --digest).
  *
  * Honest agreement: every input x runs x machines. Cheats: ASR tiny/base/small, truncate 60%, empty,
@@ -18,7 +19,7 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parseArgs } from "node:util";
-import { cer, normalize, outputHashOf, overlapText, wer, type NormSpec } from "../packages/shared/src/index.js";
+import { normalize, outputHashOf, overlapText, type NormSpec } from "../packages/shared/src/index.js";
 
 const { values } = parseArgs({
   options: {
@@ -186,7 +187,47 @@ const worstPi = Math.min(...piRows.map((r) => r.piBps));
 if (cls === "TOLERANCE" && (tau === 0 || fpBps > 100 || worstPi < 3000)) cls = "NOT_COVERABLE";
 
 const honestCost = values["honest-cost-tinybar"] ? BigInt(values["honest-cost-tinybar"]) : null;
-const errorRates = inputs.filter((i) => i.ref).map((i) => ({ input: i.name, [task === "asr" ? "wer" : "cer"]: task === "asr" ? wer(i.ref!, i.reference) : cer(i.ref!, i.reference) }));
+// ------------------------------------------------------------ add-on A2: measured accuracy
+/** edit distance over arrays */
+function edits<T>(a: T[], b: T[]): number {
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = prev[0];
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j];
+      prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diag = tmp;
+    }
+  }
+  return prev[b.length];
+}
+const unit = (t: string) => (task === "asr" ? (t ? t.split(" ") : []) : [...t]);
+const scored = inputs.filter((i) => i.ref !== undefined && !i.ref.startsWith("!!"));
+const perInput = scored.map((i) => ({ input: i.name, errors: edits(unit(i.ref!), unit(i.reference)), length: unit(i.ref!).length }));
+const corpus = (rows: typeof perInput) => {
+  const n = rows.reduce((x, r) => x + r.length, 0);
+  return n ? rows.reduce((x, r) => x + r.errors, 0) / n : NaN;
+};
+// bootstrap over inputs (deterministic PRNG so the report is reproducible)
+let bs = 12345;
+const rnd = () => ((bs = (bs * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+const boots: number[] = [];
+for (let k = 0; k < 2000 && perInput.length; k++) boots.push(corpus(Array.from({ length: perInput.length }, () => perInput[Math.floor(rnd() * perInput.length)])));
+boots.sort((a, b) => a - b);
+const accuracy = {
+  metric: task === "asr" ? "WER" : "CER",
+  normalization: task === "asr" ? "NORM_ASR_V1" : "NORM_OCR_V1B",
+  inputsWithReference: perInput.length,
+  inputsWithoutReference: inputs.length - perInput.length,
+  referenceUnits: perInput.reduce((x, r) => x + r.length, 0),
+  corpusError: corpus(perInput),
+  ci95: boots.length ? [boots[Math.floor(boots.length * 0.025)], boots[Math.floor(boots.length * 0.975)]] : null,
+  perInput,
+  registry: { expectedErrorBps: Math.round(corpus(perInput) * 10_000), errorSampleSize: perInput.length },
+  limits: "describes the pinned model on this small test set, not any single job; not a guarantee",
+};
+if (inputs.length - perInput.length) console.warn(`WARNING: ${inputs.length - perInput.length} input(s) have no .ref.txt; A2 needs a human-checked reference for every input`);
 
 const report = {
   task,
@@ -206,7 +247,7 @@ const report = {
   },
   decision: { class: cls, tauBps: cls === "EXACT" ? 0 : tau, fpBps, worstCheatPiBps: worstPi },
   cheats: piRows.map((r) => ({ ...r, cTinybar: honestCost ? ((honestCost * BigInt(Math.round(r.savedFraction * 1000))) / 1000n).toString() : null, cProvenance: "assumed (time ratio x --honest-cost-tinybar)" })),
-  errorRates,
+  accuracy,
   provenance: "measured (this script, real pinned workers); cTinybar is assumed",
 };
 const dir = join(import.meta.dirname, "../docs/gates");
@@ -219,4 +260,8 @@ console.log(`class: ${cls}${cls !== "EXACT" ? `  tau ${tau} bps  fp ${fpBps} bps
 console.log("| cheat | pi (bps) | compute saved |\n|---|---|---|");
 for (const r of piRows) console.log(`| ${r.cheat} | ${r.piBps} | ${(r.savedFraction * 100).toFixed(0)}% |`);
 if (cls === "NOT_COVERABLE") console.log("\n!! NOT COVERABLE on this stack: restrict inputs or pin one hardware class, and say so in the README.");
+if (perInput.length) {
+  console.log(`\naccuracy (A2): corpus ${accuracy.metric} ${(accuracy.corpusError * 100).toFixed(2)}% on ${perInput.length} inputs (${accuracy.referenceUnits} reference ${task === "asr" ? "words" : "characters"}), bootstrap 95% CI ${accuracy.ci95!.map((x) => (x * 100).toFixed(2) + "%").join(" - ")}`);
+  console.log(`registry: ${task.toUpperCase()}_ERROR_BPS=${accuracy.registry.expectedErrorBps} ${task.toUpperCase()}_ERROR_N=${accuracy.registry.errorSampleSize}  -> copy into docs/ACCURACY.md`);
+}
 console.log(`\nwrote docs/gates/G3.${task}.json (${basename(values.data)})`);

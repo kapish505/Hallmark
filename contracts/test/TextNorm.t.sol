@@ -12,6 +12,7 @@ contract TextNormTest is Test {
     function test_validAsrAndOcr() public view {
         assertEq(j.check("hello world it's 2", 1), 4);
         assertEq(j.check("hello world 2", 2), 3);
+        assertEq(j.check("total 42.50 and 1,200", 2), 4); // NORM_OCR_V1B keeps separators between digits
         assertEq(j.check("", 1), 0);
     }
 
@@ -28,6 +29,12 @@ contract TextNormTest is Test {
         j.check("Hello", 1);
         vm.expectRevert(abi.encodeWithSelector(TextNorm.BadChar.selector, 1));
         j.check(hex"61c3a9", 1); // non-ASCII
+        vm.expectRevert(abi.encodeWithSelector(TextNorm.BadChar.selector, 1));
+        j.check("a.5", 2); // '.' not between two digits
+        vm.expectRevert(abi.encodeWithSelector(TextNorm.BadChar.selector, 1));
+        j.check("4.", 2);
+        vm.expectRevert(abi.encodeWithSelector(TextNorm.BadChar.selector, 1));
+        j.check("4.5", 1); // ASR keeps no '.'
         vm.expectRevert(TextNorm.BadSpec.selector);
         j.check("a", 3);
     }

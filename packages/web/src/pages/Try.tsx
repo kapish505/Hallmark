@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { GATEWAY } from "../api";
 
-export function TryPage({ onJob }: { onJob: (id: string) => void }) {
+export function TryPage({ onJob }: { onJob: (id: string, token?: string) => void }) {
   const [task, setTask] = useState<"asr" | "ocr">("asr");
   const [file, setFile] = useState<File | null>(null);
   const [token, setToken] = useState("");
@@ -15,7 +15,7 @@ export function TryPage({ onJob }: { onJob: (id: string) => void }) {
     const r = await fetch(`${GATEWAY}/demo/try`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: f });
     const j = await r.json();
     setMsg(r.ok ? `${j.status}: ${j.badge}` : `error: ${j.error}`);
-    if (j.jobId) onJob(j.jobId);
+    if (j.jobId) onJob(j.jobId, j.accessToken);
   };
   return (
     <div className="stack narrow">

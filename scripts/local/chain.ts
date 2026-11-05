@@ -74,6 +74,8 @@ export async function deployAll(provider: JsonRpcProvider, o: { ownerKey: string
     enabled: true,
     piBps: 5000,
     fpBps: fp,
+    expectedErrorBps: 0, // [LOCAL] not measured
+    errorSampleSize: 0,
     runtimeDigest: "0x" + "00".repeat(32),
     hwClass: "0x" + "00".repeat(32),
     fee,

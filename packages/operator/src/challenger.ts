@@ -2,9 +2,10 @@ import {
   logger,
   ModelClass,
   normalize,
-  outputHashOf,
+  outCommitOf,
   overlapText,
   readJob,
+  saltCommitOf,
   Status,
   toWire,
   TxRevert,
@@ -84,15 +85,21 @@ export class Challenger {
       this.log.warn("challenge budget exhausted; skipping", { jobId });
       return;
     }
-    const eHash = String((await core.seat(jobId, j.executor)).outputHash);
-    const input = await this.d.evidence.input(j.inputHash);
+    const eCommit = String((await core.seat(jobId, j.executor)).outCommit);
+    // the challenger reads private evidence as a listed watcher (add-on A1)
+    const jobSalt = await this.d.evidence.salt(jobId);
+    if (saltCommitOf(jobSalt).toLowerCase() !== j.saltCommit.toLowerCase()) throw new Error("salt mismatch from gateway");
+    const input = await this.d.evidence.input(jobId, j.inputHash);
     const mine = normalize(await this.d.worker.run(taskOfSpec(j.normSpec), input), j.normSpec as NormSpec).text;
+    const core0 = await core.getAddress();
+    const chainId = (await core.runner!.provider!.getNetwork()).chainId;
     let reason: string | null = null;
-    if (outputHashOf(mine).toLowerCase() === eHash.toLowerCase()) reason = null;
-    else if (j.cls === ModelClass.EXACT) reason = "hash differs (exact class)";
+    if (outCommitOf({ chainId, core: core0, jobId, jobSalt, text: mine }).toLowerCase() === eCommit.toLowerCase()) reason = null;
+    else if (j.cls === ModelClass.EXACT) reason = "commitment differs (exact class)";
     else {
-      const theirs = await this.d.evidence.outputByHash(eHash);
-      if (theirs === null) reason = "executor text unavailable in the evidence store";
+      const theirs = await this.d.evidence.output(jobId, j.executor);
+      const valid = theirs !== null && outCommitOf({ chainId, core: core0, jobId, jobSalt, text: theirs }).toLowerCase() === eCommit.toLowerCase();
+      if (!valid) reason = "executor text unavailable (or not matching its commitment) in the evidence store";
       else {
         const ov = overlapText(mine, theirs);
         this.log.info("checked provisional result", { jobId, overlapBps: ov, tau: j.tauBps });

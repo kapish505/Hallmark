@@ -17,7 +17,7 @@ interface IHallmarkJudge {
 ///     not audited: executor reveal -> challenge window -> settle
 ///     audited:     verifier commits blind -> both reveal -> compare -> agree | (text) | committee -> resolve
 ///   Every stalled stage has an `expire` path that refunds the buyer and penalizes only the missing party.
-///   Output text never appears in events; only hashes (and, in tolerance disputes, calldata text).
+///   Output text never appears in events; only salted commitments (and, in tolerance disputes, calldata text).
 contract Hallmark is Ownable, ReentrancyGuard {
     // ---------------------------------------------------------------- types
     enum Status {
@@ -81,6 +81,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
         uint64 createdAt;
         bytes32 modelId;
         bytes32 inputHash;
+        bytes32 saltCommit;
         uint128 fee;
         uint128 protocolFee;
         uint128 auditFee;
@@ -91,7 +92,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
 
     struct Seat {
         bytes32 commitment;
-        bytes32 outputHash;
+        bytes32 outCommit;
         uint8 role;
         bool revealed;
         bool textPosted;
@@ -135,7 +136,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
     address internal constant PRNG = address(0x169);
     uint256 internal constant MAX_OPERATORS = 64;
     uint256 internal constant PUSH_GAS = 10_000;
-    bytes32 internal constant EMPTY_HASH = keccak256("");
+    bytes32 public constant OUT_DOMAIN = keccak256("HALLMARK_OUT_V1");
 
     // ---------------------------------------------------------------- state
     ModelRegistry public immutable registry;
@@ -179,7 +180,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
     event Committed(bytes32 indexed jobId, address indexed who, uint8 role);
     event AuditDrawn(bytes32 indexed jobId, bool audited, bool prng);
     event VerifierAssigned(bytes32 indexed jobId, address indexed verifier);
-    event Revealed(bytes32 indexed jobId, address indexed who, uint8 role, bytes32 outputHash, string evidenceRef);
+    event Revealed(bytes32 indexed jobId, address indexed who, uint8 role, bytes32 outCommit, string evidenceRef);
     event TextPosted(bytes32 indexed jobId, address indexed who);
     event Compared(bytes32 indexed jobId, bool agree, uint256 overlapBps);
     event CommitteeDrawn(bytes32 indexed jobId, address[] members);
@@ -207,6 +208,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
     error OnlyEOA();
     error BadReveal();
     error EmptyOutput();
+    error BadSalt();
     error BadText();
     error TextMissing();
     error BadWordCount(uint256 words);
@@ -352,7 +354,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
         available = m.enabled && bond <= ceiling && eligibleCount(bond) >= 2 + uint256(p.committeeSize);
     }
 
-    function createJob(bytes32 jobId, address buyer, bytes32 inputHash, bytes32 modelId)
+    function createJob(bytes32 jobId, address buyer, bytes32 inputHash, bytes32 saltCommit, bytes32 modelId)
         external
         payable
         nonReentrant
@@ -360,7 +362,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
         if (msg.sender != gateway) revert NotGateway();
         Job storage j = _jobs[jobId];
         if (jobId == bytes32(0) || j.status != Status.None) revert JobExists();
-        if (buyer == address(0) || inputHash == bytes32(0)) revert BadArgs();
+        if (buyer == address(0) || inputHash == bytes32(0) || saltCommit == bytes32(0)) revert BadArgs();
         ModelRegistry.Model memory m = registry.get(modelId);
         if (!m.enabled) revert ModelDisabled();
         Params memory p = params;
@@ -375,6 +377,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
         j.buyer = buyer;
         j.modelId = modelId;
         j.inputHash = inputHash;
+        j.saltCommit = saltCommit;
         j.auditFee = uint128(aFee);
         j.bond = uint128(bond);
         escrow += price;
@@ -451,28 +454,30 @@ contract Hallmark is Ownable, ReentrancyGuard {
         _setStatus(id, j, Status.Reveal, j.revealWindow);
     }
 
-    /// @notice Reveal an output hash. Committee members in a TOLERANCE job use revealText instead.
-    function reveal(bytes32 id, bytes32 outputHash, bytes32 salt, string calldata evidenceRef) external nonReentrant {
+    /// @notice Reveal a salted output commitment (outCommitFor). Committee members in a TOLERANCE job
+    ///         use revealText instead. `commitSalt` is the operator's own blinding salt from `commit`.
+    function reveal(bytes32 id, bytes32 outCommit, bytes32 commitSalt, string calldata evidenceRef) external nonReentrant {
         Job storage j = _jobs[id];
         if (j.status == Status.CommitteeReveal && j.cls == TOLERANCE) revert UseRevealText();
-        _reveal(id, j, outputHash, salt, evidenceRef);
+        _reveal(id, j, outCommit, commitSalt, evidenceRef);
     }
 
     /// @notice Committee reveal for TOLERANCE jobs: the text itself, so overlap can be computed.
-    function revealText(bytes32 id, bytes calldata text, bytes32 salt, string calldata evidenceRef)
+    function revealText(bytes32 id, bytes calldata text, bytes32 jobSalt, bytes32 commitSalt, string calldata evidenceRef)
         external
         nonReentrant
     {
         Job storage j = _jobs[id];
         if (j.status != Status.CommitteeReveal) revert BadStatus();
+        _checkSalt(j, jobSalt);
         _checkText(j, text);
-        _reveal(id, j, keccak256(text), salt, evidenceRef);
+        _reveal(id, j, outCommitFor(id, jobSalt, text), commitSalt, evidenceRef);
         _seats[id][msg.sender].textPosted = true;
     }
 
-    function _reveal(bytes32 id, Job storage j, bytes32 outputHash, bytes32 salt, string calldata ref) private {
+    function _reveal(bytes32 id, Job storage j, bytes32 outCommit, bytes32 commitSalt, string calldata ref) private {
         if (block.timestamp > j.deadline) revert WindowClosed();
-        if (outputHash == bytes32(0) || outputHash == EMPTY_HASH) revert EmptyOutput();
+        if (outCommit == bytes32(0)) revert EmptyOutput();
         if (bytes(ref).length > 256) revert BadArgs();
         Seat storage s = _seats[id][msg.sender];
         if (s.commitment == bytes32(0) || s.revealed) revert NotYourTurn();
@@ -481,10 +486,10 @@ contract Hallmark is Ownable, ReentrancyGuard {
         } else if (j.status != Status.CommitteeReveal || s.role != ROLE_MEMBER) {
             revert BadStatus();
         }
-        if (commitmentFor(id, msg.sender, outputHash, salt) != s.commitment) revert BadReveal();
+        if (commitmentFor(id, msg.sender, outCommit, commitSalt) != s.commitment) revert BadReveal();
         s.revealed = true;
-        s.outputHash = outputHash;
-        emit Revealed(id, msg.sender, s.role, outputHash, ref);
+        s.outCommit = outCommit;
+        emit Revealed(id, msg.sender, s.role, outCommit, ref);
         if (j.status == Status.Reveal) {
             bool vDone = j.verifier == address(0) || _seats[id][j.verifier].revealed;
             if (_seats[id][j.executor].revealed && vDone) _afterReveals(id, j);
@@ -498,8 +503,8 @@ contract Hallmark is Ownable, ReentrancyGuard {
             _setStatus(id, j, Status.Challenge, j.challengeWindow);
             return;
         }
-        bytes32 he = _seats[id][j.executor].outputHash;
-        bytes32 hv = _seats[id][j.verifier].outputHash;
+        bytes32 he = _seats[id][j.executor].outCommit;
+        bytes32 hv = _seats[id][j.verifier].outCommit;
         if (he == hv) {
             emit Compared(id, true, 10_000);
             _settleAgreed(id, j);
@@ -512,32 +517,39 @@ contract Hallmark is Ownable, ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------- tolerance text
-    /// @notice Executor and verifier publish their normalized text (calldata) when hashes differ.
-    function postText(bytes32 id, bytes calldata text) external {
+    /// @notice Executor and verifier publish their normalized text (calldata) when commitments differ.
+    ///         The job salt becomes public here: tolerance-class text is public by nature (add-on A1).
+    function postText(bytes32 id, bytes calldata text, bytes32 jobSalt) external {
         Job storage j = _jobs[id];
         if (j.status != Status.Text) revert BadStatus();
         if (block.timestamp > j.deadline) revert WindowClosed();
         if (msg.sender != j.executor && msg.sender != j.verifier) revert NotYourTurn();
         Seat storage s = _seats[id][msg.sender];
+        _checkSalt(j, jobSalt);
         _checkText(j, text);
-        if (keccak256(text) != s.outputHash) revert BadText();
+        if (outCommitFor(id, jobSalt, text) != s.outCommit) revert BadText();
         s.textPosted = true;
         emit TextPosted(id, msg.sender);
     }
 
     /// @notice Anyone, once both texts are posted: overlap >= tau agrees, otherwise the committee re-runs.
-    function compareTexts(bytes32 id, bytes calldata textE, bytes calldata textV) external nonReentrant {
+    function compareTexts(bytes32 id, bytes calldata textE, bytes calldata textV, bytes32 jobSalt) external nonReentrant {
         Job storage j = _jobs[id];
         if (j.status != Status.Text) revert BadStatus();
         Seat storage se = _seats[id][j.executor];
         Seat storage sv = _seats[id][j.verifier];
         if (!se.textPosted || !sv.textPosted) revert TextMissing();
-        if (keccak256(textE) != se.outputHash || keccak256(textV) != sv.outputHash) revert BadText();
+        _checkSalt(j, jobSalt);
+        if (outCommitFor(id, jobSalt, textE) != se.outCommit || outCommitFor(id, jobSalt, textV) != sv.outCommit) revert BadText();
         uint256 ov = judge.overlap(textE, textV);
         bool agree = ov >= j.tauBps;
         emit Compared(id, agree, ov);
         if (agree) _settleAgreed(id, j);
         else _startCommittee(id, j);
+    }
+
+    function _checkSalt(Job storage j, bytes32 jobSalt) private view {
+        if (keccak256(abi.encodePacked(jobSalt)) != j.saltCommit) revert BadSalt();
     }
 
     function _checkText(Job storage j, bytes calldata text) private view {
@@ -641,11 +653,12 @@ contract Hallmark is Ownable, ReentrancyGuard {
 
     /// @notice Majority of the committee decides (section 8.3). For TOLERANCE jobs pass every text:
     ///         texts[0] = executor, texts[1] = verifier, texts[2+i] = member i (ignored if not revealed).
-    function resolve(bytes32 id, bytes[] calldata texts) external nonReentrant {
+    function resolve(bytes32 id, bytes[] calldata texts, bytes32 jobSalt) external nonReentrant {
         Job storage j = _jobs[id];
         if (j.status != Status.CommitteeReveal) revert BadStatus();
         if (j.revealedCount < j.committed && block.timestamp <= j.deadline) revert TooEarly();
-        Tally memory t = _tally(id, j, texts);
+        if (j.cls == TOLERANCE) _checkSalt(j, jobSalt);
+        Tally memory t = _tally(id, j, texts, jobSalt);
         uint256 thr = uint256(j.committeeSize) / 2 + 1;
         bool eOk = t.cE >= thr;
         bool vOk = t.cV >= thr;
@@ -687,14 +700,14 @@ contract Hallmark is Ownable, ReentrancyGuard {
         uint256 maskV;
     }
 
-    function _tally(bytes32 id, Job storage j, bytes[] calldata texts) private returns (Tally memory t) {
+    function _tally(bytes32 id, Job storage j, bytes[] calldata texts, bytes32 jobSalt) private returns (Tally memory t) {
         address[] memory c = _committee[id];
         bool tol = j.cls == TOLERANCE;
         if (
             tol
                 && (
-                    texts.length != 2 + c.length || keccak256(texts[0]) != _seats[id][j.executor].outputHash
-                        || keccak256(texts[1]) != _seats[id][j.verifier].outputHash
+                    texts.length != 2 + c.length || outCommitFor(id, jobSalt, texts[0]) != _seats[id][j.executor].outCommit
+                        || outCommitFor(id, jobSalt, texts[1]) != _seats[id][j.verifier].outCommit
                 )
         ) revert BadText();
         for (uint256 i; i < c.length; ++i) {
@@ -704,7 +717,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
                 continue;
             }
             ++t.r;
-            (bool aE, bool aV) = _consistent(id, j, s.outputHash, texts, i);
+            (bool aE, bool aV) = _consistent(id, j, s.outCommit, texts, i, jobSalt);
             if (aE) {
                 ++t.cE;
                 t.maskE |= 1 << i;
@@ -718,15 +731,15 @@ contract Hallmark is Ownable, ReentrancyGuard {
         }
     }
 
-    function _consistent(bytes32 id, Job storage j, bytes32 h, bytes[] calldata texts, uint256 i)
+    function _consistent(bytes32 id, Job storage j, bytes32 h, bytes[] calldata texts, uint256 i, bytes32 jobSalt)
         private
         view
         returns (bool aE, bool aV)
     {
-        aE = h == _seats[id][j.executor].outputHash;
-        aV = h == _seats[id][j.verifier].outputHash;
+        aE = h == _seats[id][j.executor].outCommit;
+        aV = h == _seats[id][j.verifier].outCommit;
         if (j.cls == TOLERANCE) {
-            if (keccak256(texts[2 + i]) != h) revert BadText();
+            if (outCommitFor(id, jobSalt, texts[2 + i]) != h) revert BadText();
             if (!aE) aE = judge.overlap(texts[2 + i], texts[0]) >= j.tauBps;
             if (!aV) aV = judge.overlap(texts[2 + i], texts[1]) >= j.tauBps;
         }
@@ -963,8 +976,14 @@ contract Hallmark is Ownable, ReentrancyGuard {
     }
 
     // ---------------------------------------------------------------- views
-    function commitmentFor(bytes32 id, address who, bytes32 outputHash, bytes32 salt) public view returns (bytes32) {
-        return keccak256(abi.encode(COMMIT_DOMAIN, block.chainid, address(this), id, who, outputHash, salt));
+    /// @notice the operator's blinded commitment to its outCommit
+    function commitmentFor(bytes32 id, address who, bytes32 outCommit, bytes32 commitSalt) public view returns (bytes32) {
+        return keccak256(abi.encode(COMMIT_DOMAIN, block.chainid, address(this), id, who, outCommit, commitSalt));
+    }
+
+    /// @notice salted output commitment (add-on A1): without jobSalt nobody can test a guessed text against it
+    function outCommitFor(bytes32 id, bytes32 jobSalt, bytes calldata text) public view returns (bytes32) {
+        return keccak256(abi.encode(OUT_DOMAIN, block.chainid, address(this), id, jobSalt, text));
     }
 
     function getParams() external view returns (Params memory) {

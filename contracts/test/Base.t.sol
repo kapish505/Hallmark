@@ -90,11 +90,23 @@ abstract contract Base is Test {
         return h.getJob(id).bond;
     }
 
+    function jobSalt(bytes32 id) internal pure returns (bytes32) {
+        return keccak256(abi.encode("jobSalt", id));
+    }
+
+    function saltCommit(bytes32 id) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(jobSalt(id)));
+    }
+
+    function outC(bytes32 id, bytes memory text) internal view returns (bytes32) {
+        return h.outCommitFor(id, jobSalt(id), text);
+    }
+
     function create(bytes32 model) internal returns (bytes32 id) {
         id = keccak256(abi.encode("job", ++jobSeq));
         uint256 p = price(model);
         vm.prank(gateway);
-        h.createJob{value: p}(id, buyer, INPUT, model);
+        h.createJob{value: p}(id, buyer, INPUT, saltCommit(id), model);
     }
 
     function job(bytes32 id) internal view returns (Hallmark.Job memory) {
@@ -110,14 +122,15 @@ abstract contract Base is Test {
     }
 
     function commitText(bytes32 id, address who, bytes memory text) internal {
-        bytes32 c = h.commitmentFor(id, who, keccak256(text), salt(who));
+        bytes32 c = h.commitmentFor(id, who, outC(id, text), salt(who));
         vm.prank(who);
         h.commit(id, c);
     }
 
     function revealTextHash(bytes32 id, address who, bytes memory text) internal {
+        bytes32 oc = outC(id, text);
         vm.prank(who);
-        h.reveal(id, keccak256(text), salt(who), "blob://x");
+        h.reveal(id, oc, salt(who), "blob://x");
     }
 
     /// @dev search prevrandao so drawAudit gives the wanted outcome (deterministic tests)
@@ -159,9 +172,10 @@ abstract contract Base is Test {
             commitText(id, m[i], texts[i]);
         }
         for (uint256 i; i < m.length; ++i) {
+            bytes32 oc = outC(id, texts[i]);
             vm.prank(m[i]);
-            if (tolerance) h.revealText(id, texts[i], salt(m[i]), "blob://m");
-            else h.reveal(id, keccak256(texts[i]), salt(m[i]), "blob://m");
+            if (tolerance) h.revealText(id, texts[i], jobSalt(id), salt(m[i]), "blob://m");
+            else h.reveal(id, oc, salt(m[i]), "blob://m");
         }
     }
 

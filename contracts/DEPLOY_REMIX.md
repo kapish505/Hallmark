@@ -1,7 +1,7 @@
-# Deploying Hallmark contracts with Remix (Hedera testnet)
+# Deploying Hallmark with Remix (Hedera testnet)
 
-Nothing here has been deployed yet. Everything below is for you to run in Remix.
-Values marked ⚠ are unconfirmed until gate G2 (the `Probe` contract) checks them on testnet.
+Nothing has been deployed yet. Values marked ⚠ are unconfirmed until gate G2 checks them on testnet.
+Everything here is testnet only.
 
 ## 1. Chain
 
@@ -14,128 +14,75 @@ Values marked ⚠ are unconfirmed until gate G2 (the `Probe` contract) checks th
 | Explorer | `https://hashscan.io/testnet` |
 | Mirror Node REST | `https://testnet.mirrornode.hedera.com/api/v1` |
 
-**Wallet:** add the network above to MetaMask and import the **ECDSA (secp256k1)** private key of
-your *deployer* account from the Hedera Portal. ED25519 accounts have no EVM address and will not work.
-In Remix, choose **Environment → "Injected Provider - MetaMask"** and check it shows chain 296.
+Use an **ECDSA (secp256k1)** account from the Hedera Portal in MetaMask (ED25519 accounts have no EVM address). In Remix pick
+**Injected Provider - MetaMask** and check it shows chain 296.
 
-**Units:** contracts work in **tinybar** (1 HBAR = 100,000,000 tinybar). The relay and MetaMask use
-18-decimal **weibar** on the wire, so in Remix's VALUE box **1 `ether` = 1 HBAR** ⚠ (G2 step 1
-confirms this). Example: a 10 HBAR stake is VALUE `10` with unit `Ether`, and the contract sees
-`1_000_000_000`.
+**Units:** contracts count **tinybar** (1 HBAR = 100,000,000 tinybar). MetaMask and the relay use 18-decimal weibar, so in
+Remix's VALUE box **1 Ether = 1 HBAR** ⚠ (G2 step 1 confirms it). Never send value to a constructor: on Hedera a payable
+constructor sees `msg.value == 0`.
 
-## 2. Remix compiler settings (all contracts)
+## 2. Sources and compiler settings
 
-- Compiler **0.8.24**
-- Optimization **enabled, runs = 50**
-- EVM version **paris** (avoids `PUSH0`; G2 tests whether `shanghai`/`cancun` work)
-- viaIR **off**
-- No external imports. Upload the whole `contracts/src` folder, keeping `libs/` as a subfolder.
-
-Runtime sizes at these settings (limit 24,576 B): Hallmark 21,666 · HallmarkArbitration 11,293 ·
-HallmarkJudge 3,618 · ModelRegistry 1,669 · Probe 3,989.
-
-## 3. Gas limits
-
-Remix/MetaMask estimates are unreliable on the Hedera relay. **Set the gas limit by hand.** Hedera
-charges for at least 80% of the limit, so don't set it far too high. Local measurements (paris, runs 50):
-
-| Deploy | Gas used (local EVM) | Suggested limit |
-|---|---|---|
-| Probe | 916k | 1,200,000 |
-| ModelRegistry | 476k | 700,000 |
-| HallmarkJudge | 867k | 1,100,000 |
-| Hallmark | 5.01M | **6,500,000** |
-| HallmarkArbitration | 2.55M | 3,200,000 |
-
-Hedera gas costs differ from Ethereum's. Record the real `charged_tx_fee` from the Mirror Node in
-`docs/gates/G2.md`. The deployer needs roughly 20 HBAR or more. Adjust once you've seen the first fee.
-
-## 4. Deploy order
-
-**Step 0 (gate G2): deploy `Probe` first**, with no value, then:
-1. `payIn()` with VALUE 1 Ether → the `ValueSeen` event should show `msgValue = 100000000` (tinybar).
-2. `ctorValue()` → expect 0 (never fund contracts in a constructor).
-3. Send `seed()` twice → the `SeedResult` event should show `ok=true, retLen=32` and a different seed each time.
-4. `chainInfo()` → chainId 296. Note whether `prevrandao` is non-zero.
-5. `recover(...)` with a signature made off-chain → it should return your address.
-6. `write`, `emit1k`, then `overlapMax` with gas limit 15,000,000 → record gas and fees from HashScan.
-
-Write the results into `docs/gates/G2.md`. If `seed()` fails, Hallmark still works: it falls back
-to `prevrandao` (and then a weak fallback), and every job emits `SeedDrawn(source)` so the UI can label it.
-
-**Then the protocol (record every address):**
-
-| # | Contract / call | Constructor args / inputs |
-|---|---|---|
-| 1 | `ModelRegistry` | `initialOwner` = deployer address |
-| 2 | `HallmarkJudge` | none |
-| 3 | `Hallmark` | `initialOwner` = deployer, `registry_` = #1, `judge_` = #2, `gateway_` = **gateway account's EVM address** |
-| 4 | `HallmarkArbitration` | `initialOwner` = deployer, `core_` = #3, `judge_` = #2 |
-| 5 | `Hallmark.setArbitration` | #4 |
-| 6 | `HallmarkArbitration.setArbiters` | `["0xArbiter1","0xArbiter2","0xArbiter3"]`, `2` |
-| 7 | `ModelRegistry.setModel` | see below |
-| 8 | `Hallmark.registerMiner` (from **each** miner account) | VALUE ≥ 10 Ether (= `minStake` of 10 HBAR) |
-| 9 | *(demo only)* `Hallmark.setTier(...)` | e.g. to show a tier's effect live; every change applies to new jobs only. Say so in the video |
-
-Step 7, `setModel` inputs:
-
-```
-modelId: 0xb9767d60a0d8de8b5b09b767ae5c44fc149066124c9639cff36e270d23369284
-m:       ["0x505bae7bdf3c3cddbdeb0df684c56982ce5363be1513fb67b41ee197c5c42fe1","0xcee5447de118b9924a3a4841fd9180ecf6c297397ee0745334911654c39eb39b","0x1b24f3f9a480b5aaa08c315c7c7712cf9a6dbc3d2ea3cf5dfc1614bfec8c8a0a",8500,3,96,true]
-```
-
-- `modelId` = keccak256("whisper-large-v3/faster-whisper/int8/NORM_V1")
-- `normSpecHash` = keccak256("NORM_V1")
-- `weightsHash` and `runtimeImageDigest` are **placeholders**. Call `setModel` again with real
-  values once the miner Docker image is pinned (G5).
-- `tauBps = 8500` is the spec default. **Replace it with the value G5 calibrates.**
-
-Default parameters set in the constructor (tinybar). The economics are the **Addendum A
-[ASSUMED] example**; replace them with measured values via `setParams` once G5/M-series exist:
-
-| Parameter | Default |
-|---|---|
-| windows (commit / reveal / arbitration) | 60 / 45 / 300 s |
-| `baseMinerFee` / `protocolFee` / `arbCostEst` | 0.2 / 0.01 / 0.1 HBAR |
-| `cMax` (honest cost upper bound) | 0.08 HBAR (must stay < baseMinerFee / 2; enforced) |
-| `minBond` / `maxBond` / `minStake` | 0.1 / 10 / 10 HBAR |
-| penalties | no-reveal 50%, missed commit 10%; challenge bond = 2× price |
-
-Assurance tiers (buyer-selected, snapshotted per job):
-
-| Tier | auditBps | challenge window | price | bond / seat |
-|---|---|---|---|---|
-| basic | 1000 | 60 s | 0.22 HBAR | 0.70 HBAR |
-| standard | 3000 | 60 s | 0.24 HBAR | 0.1666 HBAR |
-| assured | 10000 | none (always arbitrated) | 0.31 HBAR | 0.10 HBAR (floor) |
-
-`price = baseMinerFee + protocolFee + ceil(auditBps × arbCostEst / 10000)`,
-`bond = max(minBond, ceil(cMax × 10000 / auditBps) − baseMinerFee/2)`. A cheaper tier needs a
-bigger bond, so every tier faces the same cheating inequality. Owner-only setters at runtime:
-`setParams(...)` (opens a new params version; running jobs keep theirs) and
-`setTier(tier, auditBps, challengeWindow, enabled)`. A tier whose bond exceeds `maxBond` is
-automatically unavailable. `forge script script/Deploy.s.sol` prints this table and refuses to
-continue if honest miners would not profit.
-
-The gateway reads tier prices from `quote(tier)`. You never type a price into the gateway.
-
-## 5. Verify (Sourcify)
-
-Use the Remix **Contract Verification** plugin with Sourcify, chain 296, and the same compiler
-settings. HashScan then shows the contracts as verified. Put all addresses into the README.
-
-## 6. Accounts checklist (all ECDSA)
-
-deployer/owner · gateway (also the x402 `payTo`) · miner A/B/C (≥ 15 HBAR each: 10 stake + gas) ·
-arbiter 1/2/3 (only sign off-chain; a relayer pays gas) · challenger bot · buyer agent
-(**must differ from `payTo`**).
-
-## 7. Re-running the local checks
+Use the **flattened single files** in `contracts/flat/` (`forge flatten` output). They inline OpenZeppelin **v5.1.0**, so Remix
+cannot silently resolve a newer OpenZeppelin release. Regenerate them after any contract change:
 
 ```bash
-cd contracts && forge build --sizes && forge test
+cd contracts && for c in Hallmark ModelRegistry HallmarkJudge Probe; do forge flatten src/$c.sol -o flat/$c.flat.sol; done
 ```
 
-`forge build --sizes` checks the Remix settings stay under the size limit. `forge test` runs the
-unit, fuzz, invariant, parity, tier and canary suites. Hedera-specific behaviour (units, PRNG, EVM
-version) can only be checked on testnet with `Probe` (G2).
+Compiler settings (Remix "Advanced configurations" → use a JSON config or the checkboxes):
+
+```json
+{ "language": "Solidity", "settings": { "optimizer": { "enabled": true, "runs": 50 }, "evmVersion": "paris", "viaIR": true } }
+```
+
+- Solidity **0.8.24**. **viaIR must be on**: without it Hallmark is 26.6 KB, over the 24,576-byte limit (decision V3).
+- Runtime sizes (measured, `forge build --sizes`): Hallmark **23,530 B**, ModelRegistry 4,256 B, HallmarkJudge 2,324 B, Probe 1,227 B.
+- ⚠ Hallmark's initcode is 24.4 KB. Confirm at G2 that the Hashio relay accepts a deploy transaction this large.
+
+## 3. Gas limits (set by hand)
+
+Remix and MetaMask gas estimates are unreliable on the relay. Hedera charges for at least 80% of the limit, so don't overshoot
+too far. Local-EVM deployment gas (measured: `forge test --mt test_deployGas -vv`); the Hedera numbers come from G2:
+
+| Contract | Local deploy gas | Suggested limit |
+|---|---|---|
+| HallmarkJudge | 587,758 | 900,000 |
+| ModelRegistry | 1,035,406 | 1,400,000 |
+| Hallmark | 5,321,060 | 6,800,000 |
+| Probe (G2) | small | 600,000 |
+
+Calls: `setHallmark` 100,000; `setModel` 300,000; `setParams` 300,000; `registerOperator` 300,000.
+
+## 4. Order
+
+1. **G2 first:** deploy `Probe` and `ProbeWrapper` (both in `Probe.flat.sol`), then run `pnpm probe:hedera`
+   (env `PROBE_ADDRESS`, `PROBE_WRAPPER_ADDRESS`, `PROBE_PRIVATE_KEY`). Record the results in `docs/gates/G2.md`.
+2. `HallmarkJudge` (no constructor args).
+3. `ModelRegistry(owner)`, where owner is your deployer address.
+4. `Hallmark(owner, registry, judge, gateway)`, where gateway is the **gateway account's EVM address** (the only caller of `createJob`).
+5. On the registry: `setHallmark(<Hallmark address>)` (one time only).
+6. Optional: `setParams` with your values. The defaults are [DEMO]/[ASSUMED]: auditBps 3000, committeeSize 3, windows
+   60/30/45/60/120 s, protocolFee 0.01 HBAR, arbCostEst 0.1 HBAR, minBond 0.1 HBAR, minStake 1 HBAR.
+7. **Only after G3:** `setModel(id, model)` for each task with measured values. `id = keccak256("ASR_V1")` and
+   `keccak256("OCR_V1")` (the gateway's `ASR_MODEL_KEY` / `OCR_MODEL_KEY`). Use the **worst cheat's** `cTinybar` and `piBps`
+   from `docs/gates/G3.<task>.json`, and set `expectedErrorBps` / `errorSampleSize` from the accuracy section of the same file.
+   `setModel` reverts with `WindowEmpty(bond, ceiling)` if the measured numbers give an empty bond window. **Do not work around
+   that:** it means the task is not coverable at this audit rate.
+   `normSpec`: 1 = ASR, 2 = OCR. `class`: 0 = EXACT, 1 = TOLERANCE (with `tauBps`).
+8. Optional: `fundAuditPool()` with some HBAR, so the first verifiers and committee members are paid.
+
+Alternatively, deploy everything with Foundry (same settings come from `foundry.toml`), which also prints both bond limits:
+
+```bash
+cd contracts && PRIVATE_KEY=0x... GATEWAY_ADDRESS=0x... ASR_ENABLE=true ASR_CLASS=0 ASR_FEE=... ASR_C=... ASR_MARGIN=... ASR_PI_BPS=... ASR_FP_BPS=0 \
+  forge script script/Deploy.s.sol --rpc-url https://testnet.hashio.io/api --broadcast --slow
+```
+
+## 5. After deploying
+
+- Fill `env/common.env` from `env/common.env.example`: `HALLMARK_ADDRESS`, `JUDGE_ADDRESS`, `REGISTRY_ADDRESS`.
+- Verify each contract on Sourcify (HashScan "Verify contract") with the same compiler settings, including viaIR.
+- Operators register with `registerOperator()` and a VALUE of at least minStake (the operator process does it from
+  `STAKE_TINYBAR` on first start). The gateway answers 503 until at least `2 + committeeSize` operators can cover a bond.
+- Then follow `docs/gates/G1.md` to `G5.md`.

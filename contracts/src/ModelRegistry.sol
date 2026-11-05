@@ -20,12 +20,14 @@ contract ModelRegistry is Ownable {
     struct Model {
         uint8 class; // EXACT | TOLERANCE
         uint16 tauBps; // overlap threshold (TOLERANCE only)
-        uint8 normSpec; // 1 = NORM_ASR_V1, 2 = NORM_OCR_V1
+        uint8 normSpec; // 1 = NORM_ASR_V1, 2 = NORM_OCR_V1B
         uint16 minWords;
         uint16 maxWords;
         bool enabled;
         uint16 piBps; // measured catch rate of the worst cheat (G3)
         uint16 fpBps; // measured false-alarm rate (G3)
+        uint16 expectedErrorBps; // informational: pinned model's measured WER (ASR) / CER (OCR), add-on A2
+        uint32 errorSampleSize; // informational: number of reference samples behind expectedErrorBps
         bytes32 runtimeDigest; // container image digest
         bytes32 hwClass; // hardware / OS class every operator in the pool must use
         uint128 fee; // F: executor fee, tinybar
@@ -58,7 +60,7 @@ contract ModelRegistry is Ownable {
         if (
             id == bytes32(0) || m.class > TOLERANCE || m.tauBps > 10_000 || (m.normSpec != 1 && m.normSpec != 2)
                 || m.minWords == 0 || m.maxWords > MAX_WORDS || m.minWords > m.maxWords || m.piBps == 0
-                || m.piBps > 10_000 || m.fpBps > 10_000 || m.fee == 0 || (m.class == TOLERANCE && m.tauBps == 0)
+                || m.piBps > 10_000 || m.fpBps > 10_000 || m.expectedErrorBps > 10_000 || m.fee == 0 || (m.class == TOLERANCE && m.tauBps == 0)
         ) revert BadModel();
         uint256 b;
         uint256 ceil;

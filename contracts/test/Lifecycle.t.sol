@@ -40,12 +40,12 @@ contract LifecycleTest is Base {
         uint256 p = price(ASR);
         vm.prank(gateway);
         vm.expectRevert(Hallmark.JobExists.selector);
-        h.createJob{value: p}(id, buyer, INPUT, ASR);
+        h.createJob{value: p}(id, buyer, INPUT, saltCommit(id), ASR);
         vm.prank(gateway);
         vm.expectRevert(abi.encodeWithSelector(Hallmark.WrongValue.selector, p));
-        h.createJob{value: p - 1}(keccak256("x"), buyer, INPUT, ASR);
+        h.createJob{value: p - 1}(keccak256("x"), buyer, INPUT, saltCommit(keccak256("x")), ASR);
         vm.expectRevert(Hallmark.NotGateway.selector);
-        h.createJob{value: p}(keccak256("y"), buyer, INPUT, ASR);
+        h.createJob{value: p}(keccak256("y"), buyer, INPUT, saltCommit(keccak256("y")), ASR);
     }
 
     /// edge case 4: fewer than 2 + committeeSize eligible operators
@@ -59,7 +59,7 @@ contract LifecycleTest is Base {
         uint256 p = price(ASR);
         vm.prank(gateway);
         vm.expectRevert(Hallmark.NoCapacity.selector);
-        h.createJob{value: p}(keccak256("z"), buyer, INPUT, ASR);
+        h.createJob{value: p}(keccak256("z"), buyer, INPUT, saltCommit(keccak256("z")), ASR);
     }
 
     // ------------------------------------------------------------ unaudited
@@ -120,20 +120,22 @@ contract LifecycleTest is Base {
         bytes32 id = toDraw(ASR, HONEST, true);
         Hallmark.Job memory j = job(id);
         assertEq(uint8(j.status), uint8(Hallmark.Status.VerifierCommit));
+        bytes32 oc = outC(id, HONEST);
         vm.prank(j.executor);
         vm.expectRevert(Hallmark.BadStatus.selector);
-        h.reveal(id, keccak256(HONEST), salt(j.executor), "");
+        h.reveal(id, oc, salt(j.executor), "");
     }
 
     function test_badRevealAndEmptyOutput() public {
         bytes32 id = toDraw(ASR, HONEST, false);
         address e = job(id).executor;
+        bytes32 wrong = outC(id, GARBAGE);
         vm.prank(e);
         vm.expectRevert(Hallmark.BadReveal.selector);
-        h.reveal(id, keccak256(GARBAGE), salt(e), "");
+        h.reveal(id, wrong, salt(e), "");
         vm.prank(e);
         vm.expectRevert(Hallmark.EmptyOutput.selector);
-        h.reveal(id, keccak256(""), salt(e), "");
+        h.reveal(id, bytes32(0), salt(e), "");
     }
 
     function test_mismatch_executorWrong_slashedAndRefunded() public {
@@ -144,7 +146,7 @@ contract LifecycleTest is Base {
         uint256 eFree = free(j.executor);
         uint256 buyerBefore = buyer.balance;
         committeeRun(id, three(HONEST, HONEST, HONEST), false);
-        h.resolve(id, new bytes[](0));
+        h.resolve(id, new bytes[](0), bytes32(0));
         assertEq(uint8(status(id)), uint8(Hallmark.Status.Refunded));
         assertEq(buyer.balance - buyerBefore, uint256(j.fee) + j.protocolFee + j.auditFee);
         assertEq(free(j.executor), eFree, "executor bond gone");
@@ -158,7 +160,7 @@ contract LifecycleTest is Base {
         bytes32 id = auditedReveal(ASR, HONEST, GARBAGE);
         Hallmark.Job memory j = job(id);
         committeeRun(id, three(HONEST, HONEST, HONEST), false);
-        h.resolve(id, new bytes[](0));
+        h.resolve(id, new bytes[](0), bytes32(0));
         assertEq(uint8(status(id)), uint8(Hallmark.Status.Settled));
         assertEq(h.credits(j.executor), j.fee);
         assertEq(h.credits(j.verifier), 0);
@@ -175,7 +177,7 @@ contract LifecycleTest is Base {
         address[] memory m = members(id);
         uint256 f2 = free(m[2]);
         committeeRun(id, three(HONEST, HONEST, "something else"), false);
-        h.resolve(id, new bytes[](0));
+        h.resolve(id, new bytes[](0), bytes32(0));
         assertEq(free(m[2]), f2, "bond not returned");
         assertEq(h.credits(m[2]), 0);
         assertEq(uint8(status(id)), uint8(Hallmark.Status.Refunded));
@@ -202,7 +204,7 @@ contract LifecycleTest is Base {
         h.expire(id); // m[2] did not commit
         revealTextHash(id, m[0], GARBAGE);
         revealTextHash(id, m[1], HONEST);
-        h.resolve(id, new bytes[](0));
+        h.resolve(id, new bytes[](0), bytes32(0));
         assertEq(uint8(status(id)), uint8(Hallmark.Status.Refunded));
         assertConserved();
     }
@@ -213,12 +215,12 @@ contract LifecycleTest is Base {
         assertEq(uint8(status(id)), uint8(Hallmark.Status.Text));
         Hallmark.Job memory j = job(id);
         vm.prank(j.executor);
-        h.postText(id, HONEST);
+        h.postText(id, HONEST, jobSalt(id));
         vm.expectRevert(Hallmark.TextMissing.selector);
-        h.compareTexts(id, HONEST, NEAR);
+        h.compareTexts(id, HONEST, NEAR, jobSalt(id));
         vm.prank(j.verifier);
-        h.postText(id, NEAR);
-        h.compareTexts(id, HONEST, NEAR);
+        h.postText(id, NEAR, jobSalt(id));
+        h.compareTexts(id, HONEST, NEAR, jobSalt(id));
         assertEq(uint8(status(id)), uint8(Hallmark.Status.Settled));
         assertConserved();
     }
@@ -227,10 +229,10 @@ contract LifecycleTest is Base {
         bytes32 id = auditedReveal(OCR, GARBAGE, HONEST);
         Hallmark.Job memory j = job(id);
         vm.prank(j.executor);
-        h.postText(id, GARBAGE);
+        h.postText(id, GARBAGE, jobSalt(id));
         vm.prank(j.verifier);
-        h.postText(id, HONEST);
-        h.compareTexts(id, GARBAGE, HONEST);
+        h.postText(id, HONEST, jobSalt(id));
+        h.compareTexts(id, GARBAGE, HONEST, jobSalt(id));
         assertEq(uint8(status(id)), uint8(Hallmark.Status.CommitteeCommit));
         bytes[] memory mt = three(HONEST, NEAR, HONEST);
         committeeRun(id, mt, true);
@@ -240,7 +242,7 @@ contract LifecycleTest is Base {
         all[2] = mt[0];
         all[3] = mt[1];
         all[4] = mt[2];
-        h.resolve(id, all);
+        h.resolve(id, all, jobSalt(id));
         assertEq(uint8(status(id)), uint8(Hallmark.Status.Refunded));
         assertEq(locked(j.executor), 0);
         assertConserved();
@@ -251,17 +253,20 @@ contract LifecycleTest is Base {
         address e = job(id).executor;
         vm.prank(e);
         vm.expectRevert(Hallmark.BadText.selector);
-        h.postText(id, GARBAGE);
+        h.postText(id, GARBAGE, jobSalt(id));
         vm.prank(e);
         vm.expectRevert(); // apostrophe is not an OCR word char
-        h.postText(id, "it's");
+        h.postText(id, "it's", jobSalt(id));
+        vm.prank(e);
+        vm.expectRevert(Hallmark.BadSalt.selector); // edge case 30: wrong salt
+        h.postText(id, HONEST, keccak256("wrong salt"));
     }
 
     function test_tolerance_missingText_executorPenalized() public {
         bytes32 id = auditedReveal(OCR, GARBAGE, HONEST);
         Hallmark.Job memory j = job(id);
         vm.prank(j.verifier);
-        h.postText(id, HONEST);
+        h.postText(id, HONEST, jobSalt(id));
         vm.warp(block.timestamp + 46);
         h.expire(id);
         assertEq(uint8(status(id)), uint8(Hallmark.Status.Refunded));
@@ -359,7 +364,7 @@ contract LifecycleTest is Base {
         commitText(id, j.verifier, HONEST);
         revealTextHash(id, j.verifier, HONEST);
         committeeRun(id, three(HONEST, HONEST, HONEST), false);
-        h.resolve(id, new bytes[](0));
+        h.resolve(id, new bytes[](0), bytes32(0));
         assertEq(uint8(status(id)), uint8(Hallmark.Status.Refunded));
         assertEq(h.credits(challenger), cb + uint256(j.bond) / 2, "bond back + finder share");
         assertConserved();
@@ -397,7 +402,7 @@ contract LifecycleTest is Base {
         bytes32 id = keccak256("rb");
         uint256 p = price(ASR);
         vm.prank(gateway);
-        h.createJob{value: p}(id, address(rb), INPUT, ASR);
+        h.createJob{value: p}(id, address(rb), INPUT, saltCommit(id), ASR);
         vm.warp(block.timestamp + 61);
         h.expire(id);
         assertEq(h.credits(address(rb)), p);
@@ -446,5 +451,37 @@ contract LifecycleTest is Base {
         vm.prank(keeper, keeper);
         h.drawAudit(id);
         assertEq(uint8(status(id)), uint8(Hallmark.Status.VerifierCommit));
+    }
+
+    // ------------------------------------------------------------ add-on A1: salted output commitment
+    /// edge case 31: on-chain values do not let a third party test a candidate text without jobSalt
+    function test_dictionaryTestFails() public {
+        bytes32 id = toDraw(ASR, HONEST, false);
+        Hallmark.Job memory j = job(id);
+        revealTextHash(id, j.executor, HONEST);
+        bytes32 onChain = h.seat(id, j.executor).outCommit;
+        assertTrue(onChain != keccak256(HONEST), "unsalted hash must not match");
+        assertTrue(onChain != h.outCommitFor(id, bytes32(0), HONEST), "zero salt must not match");
+        assertTrue(onChain != h.outCommitFor(id, keccak256("guess"), HONEST), "guessed salt must not match");
+        assertEq(onChain, h.outCommitFor(id, jobSalt(id), HONEST));
+        assertEq(j.saltCommit, keccak256(abi.encodePacked(jobSalt(id)))); // only the hash of the salt is stored
+    }
+
+    function test_createRequiresSaltCommit() public {
+        uint256 p = price(ASR);
+        vm.prank(gateway);
+        vm.expectRevert(Hallmark.BadArgs.selector);
+        h.createJob{value: p}(keccak256("ns"), buyer, INPUT, bytes32(0), ASR);
+    }
+
+    function test_resolveRejectsWrongSalt() public {
+        bytes32 id = auditedReveal(OCR, GARBAGE, HONEST);
+        Hallmark.Job memory j = job(id);
+        vm.prank(j.executor);
+        h.postText(id, GARBAGE, jobSalt(id));
+        vm.prank(j.verifier);
+        h.postText(id, HONEST, jobSalt(id));
+        vm.expectRevert(Hallmark.BadSalt.selector);
+        h.compareTexts(id, GARBAGE, HONEST, bytes32(uint256(1)));
     }
 }

@@ -6,8 +6,12 @@ export interface PendingRecord {
   role: number;
   task: string;
   output: string;
-  salt: string;
-  outputHash: string;
+  raw: string;
+  /** the job salt (checked against the on-chain saltCommit before any work) */
+  jobSalt: string;
+  /** this operator's blinding salt for commit/reveal */
+  commitSalt: string;
+  outCommit: string;
   commitment: string;
   behavior: string;
   committed: boolean;
@@ -26,7 +30,7 @@ function writeDurable(p: string, data: string) {
 }
 
 /**
- * Crash-safe local state (section 9.2): {output, salt} is fsync'd BEFORE the commit is sent, so a
+ * Crash-safe local state (section 9.2): {output, salts} are fsync'd BEFORE the commit is sent, so a
  * crash can never leave an on-chain commitment the operator cannot open.
  */
 export class PendingStore {

@@ -47,6 +47,8 @@ export async function loadTasks(contracts: Contracts, keys: Record<Task, string>
       tauBps: Number(m.tauBps),
       normSpec: Number(m.normSpec) as NormSpec,
       auditBps,
+      expectedErrorBps: Number(m.expectedErrorBps),
+      errorSampleSize: Number(m.errorSampleSize),
       available: Boolean(m.enabled) && Boolean(available),
     });
   }
@@ -81,7 +83,7 @@ export async function buildGateway(
     watched: [{ address: env.HALLMARK_ADDRESS, iface: ifaces.core }],
     startCursor: db.get("cursor"),
   });
-  const indexer = new Indexer({ db, source, pollMs: env.POLL_MS, cursorKey: "cursor", provider });
+  const indexer = new Indexer({ db, source, pollMs: env.POLL_MS, cursorKey: "cursor", provider, chainId: env.CHAIN_ID, core: env.HALLMARK_ADDRESS });
 
   const payTo = env.GATEWAY_ACCOUNT_ID ?? wallet.address;
   const refunder = o.refunder ?? (env.GATEWAY_ACCOUNT_ID ? new HederaRefunder(env.GATEWAY_ACCOUNT_ID, env.GATEWAY_PRIVATE_KEY) : new EvmRefunder(wallet, units));
@@ -134,6 +136,7 @@ export async function buildGateway(
       demoMode: env.DEMO_MODE,
       demoControlToken: env.DEMO_CONTROL_TOKEN,
       operatorControl,
+      watchers: env.EVIDENCE_WATCHERS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean),
     },
   });
 

@@ -19,6 +19,11 @@ export interface JobRow {
   bytes: number;
   meta: string;
   price: string;
+  /** add-on A1: never exposed publicly; only buyer, role operators and watchers may read it */
+  job_salt: string;
+  salt_commit: string;
+  access_token: string;
+  validator: string;
   payment_status: PaymentStatus;
   payer: string | null;
   buyer_evm: string | null;
@@ -54,8 +59,10 @@ export interface EventRow {
 export interface OutputRow {
   job_id: string;
   operator: string;
-  output_hash: string;
+  /** the salted outCommit this text opens */
+  out_commit: string;
   text: string;
+  raw: string;
   source: string;
 }
 
@@ -75,6 +82,7 @@ export class Db {
         bytes INTEGER NOT NULL,
         meta TEXT NOT NULL DEFAULT '{}',
         price TEXT NOT NULL,
+        job_salt TEXT NOT NULL, salt_commit TEXT NOT NULL, access_token TEXT NOT NULL, validator TEXT NOT NULL DEFAULT 'none',
         payment_status TEXT NOT NULL,
         payer TEXT, buyer_evm TEXT, settle_tx TEXT UNIQUE, create_tx TEXT, refund_tx TEXT, error TEXT,
         chain_status TEXT, executor TEXT, verifier TEXT, members TEXT, bond TEXT,
@@ -91,11 +99,11 @@ export class Db {
       );
       CREATE INDEX IF NOT EXISTS events_job ON events (job_id);
       CREATE TABLE IF NOT EXISTS outputs (
-        job_id TEXT NOT NULL, operator TEXT NOT NULL, output_hash TEXT NOT NULL, text TEXT NOT NULL,
-        source TEXT NOT NULL, created_at INTEGER NOT NULL,
+        job_id TEXT NOT NULL, operator TEXT NOT NULL, out_commit TEXT NOT NULL, text TEXT NOT NULL,
+        raw TEXT NOT NULL DEFAULT '', source TEXT NOT NULL, created_at INTEGER NOT NULL,
         PRIMARY KEY (job_id, operator)
       );
-      CREATE INDEX IF NOT EXISTS outputs_hash ON outputs (output_hash);
+      CREATE INDEX IF NOT EXISTS outputs_commit ON outputs (out_commit);
       CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
     `);
   }
@@ -118,14 +126,18 @@ export class Db {
     bytes: number;
     meta: Record<string, unknown>;
     price: bigint;
+    jobSalt: string;
+    saltCommit: string;
+    accessToken: string;
+    validator: string;
   }): JobRow {
     const now = Date.now();
     this.sql
       .prepare(
-        `INSERT INTO jobs (job_id, payment_key, task, model_id, input_hash, bytes, meta, price, payment_status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PendingSettlement', ?, ?)`,
+        `INSERT INTO jobs (job_id, payment_key, task, model_id, input_hash, bytes, meta, price, job_salt, salt_commit, access_token, validator, payment_status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PendingSettlement', ?, ?)`,
       )
-      .run(p.jobId, p.paymentKey, p.task, p.modelId, p.inputHash, p.bytes, JSON.stringify(p.meta), p.price.toString(), now, now);
+      .run(p.jobId, p.paymentKey, p.task, p.modelId, p.inputHash, p.bytes, JSON.stringify(p.meta), p.price.toString(), p.jobSalt, p.saltCommit, p.accessToken, p.validator, now, now);
     return this.job(p.jobId)!;
   }
 
@@ -169,14 +181,19 @@ export class Db {
   putOutput(o: OutputRow) {
     this.sql
       .prepare(
-        `INSERT INTO outputs (job_id, operator, output_hash, text, source, created_at) VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(job_id, operator) DO UPDATE SET output_hash = excluded.output_hash, text = excluded.text, source = excluded.source`,
+        `INSERT INTO outputs (job_id, operator, out_commit, text, raw, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(job_id, operator) DO UPDATE SET out_commit = excluded.out_commit, text = excluded.text,
+           raw = CASE WHEN excluded.raw != '' THEN excluded.raw ELSE outputs.raw END, source = excluded.source`,
       )
-      .run(o.job_id.toLowerCase(), o.operator.toLowerCase(), o.output_hash.toLowerCase(), o.text, o.source, Date.now());
+      .run(o.job_id.toLowerCase(), o.operator.toLowerCase(), o.out_commit.toLowerCase(), o.text, o.raw, o.source, Date.now());
   }
 
-  outputByHash(hash: string): string | null {
-    const r = this.sql.prepare("SELECT text FROM outputs WHERE output_hash = ? LIMIT 1").get(hash.toLowerCase()) as { text: string } | undefined;
-    return r?.text ?? null;
+  /** the text that opens `outCommit` on job `jobId` (commitments are unique per job and salt) */
+  outputByCommit(jobId: string, outCommit: string): OutputRow | null {
+    return (this.sql.prepare("SELECT * FROM outputs WHERE job_id = ? AND out_commit = ? LIMIT 1").get(jobId.toLowerCase(), outCommit.toLowerCase()) as OutputRow | undefined) ?? null;
+  }
+
+  output(jobId: string, operator: string): OutputRow | null {
+    return (this.sql.prepare("SELECT * FROM outputs WHERE job_id = ? AND operator = ?").get(jobId.toLowerCase(), operator.toLowerCase()) as OutputRow | undefined) ?? null;
   }
 }

@@ -6,7 +6,7 @@ import {
   ModelClass,
   NormError,
   Outcome,
-  outputHashOf,
+  outCommitOf,
   overlapText,
   readJob,
   Role,
@@ -24,8 +24,13 @@ export type CheckResult = { name: string; result: "PASS" | "FAIL" | "SKIP"; deta
 export interface VerifyDeps {
   provider: JsonRpcProvider;
   addresses: Addresses;
-  /** used ONLY to learn tx hashes and to fetch blobs by hash; everything is re-checked */
+  /** used ONLY to learn tx hashes and to fetch evidence; everything is re-checked */
   gatewayUrl: string;
+  /**
+   * the buyer's access token (add-on A1). Without it the job salt, input and outputs are private, so the
+   * text-level checks are SKIPPED and only the on-chain and money checks run.
+   */
+  token?: string;
 }
 
 interface Ev {
@@ -67,14 +72,23 @@ export async function verifyJob(jobId: string, d: VerifyDeps): Promise<CheckResu
   add("events re-read from receipts", evs.length > 0, `${evs.length} events from ${txs.length} transactions`);
   const find = (n: string) => evs.filter((e) => e.name === n);
 
-  // 2. input binding
-  try {
-    const res = await fetch(`${d.gatewayUrl}/inputs/${j.inputHash}`);
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    add("input bytes hash to the on-chain inputHash", res.ok && keccak256(bytes).toLowerCase() === j.inputHash.toLowerCase(), `${bytes.length} bytes`);
-  } catch (e) {
-    add("input bytes hash to the on-chain inputHash", null, `could not fetch input: ${String(e)}`);
-  }
+  // 2. private evidence (needs the buyer token): job salt and input binding
+  const auth = d.token ? { Authorization: `Bearer ${d.token}` } : undefined;
+  let jobSalt: string | null = null;
+  if (auth) {
+    const sr = await fetch(`${d.gatewayUrl}/v1/jobs/${jobId}/salt`, { headers: auth });
+    if (sr.ok) jobSalt = ((await sr.json()) as { jobSalt: string }).jobSalt;
+    add("job salt opens the on-chain saltCommit", jobSalt !== null && keccak256(jobSalt).toLowerCase() === j.saltCommit.toLowerCase(), "");
+    try {
+      const res = await fetch(`${d.gatewayUrl}/v1/jobs/${jobId}/input`, { headers: auth });
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      add("input bytes hash to the on-chain inputHash", res.ok && keccak256(bytes).toLowerCase() === j.inputHash.toLowerCase(), `${bytes.length} bytes`);
+    } catch (e) {
+      add("input bytes hash to the on-chain inputHash", null, `could not fetch input: ${String(e)}`);
+    }
+  } else add("text-level checks", null, "no buyer token: salt, input and outputs are private (add-on A1)");
+  const core0 = d.addresses.HALLMARK_ADDRESS;
+  const chainId = (await d.provider.getNetwork()).chainId;
 
   // 3. commit-then-draw order
   const eCommit = find("Committed").find((e) => Number(e.args.role) === Role.Executor);
@@ -87,19 +101,21 @@ export async function verifyJob(jobId: string, d: VerifyDeps): Promise<CheckResu
   for (const r of find("Revealed")) {
     const who = String(r.args.who);
     const s = await core.seat(jobId, who);
-    const h = String(r.args.outputHash);
-    const okSeat = s.revealed && String(s.outputHash).toLowerCase() === h.toLowerCase();
+    const h = String(r.args.outCommit);
+    const okSeat = s.revealed && String(s.outCommit).toLowerCase() === h.toLowerCase();
     let text: string | null = null;
-    try {
-      const res = await fetch(`${d.gatewayUrl}/outputs/by-hash/${h}`);
-      if (res.ok) text = await res.text();
-    } catch {
-      /* unavailable */
+    if (auth) {
+      try {
+        const res = await fetch(`${d.gatewayUrl}/v1/jobs/${jobId}/outputs/${who}`, { headers: auth });
+        if (res.ok) text = ((await res.json()) as { text: string }).text;
+      } catch {
+        /* unavailable */
+      }
     }
     let normOk: boolean | null = null;
-    let detail = text === null ? "text unavailable in the evidence store" : "";
-    if (text !== null) {
-      normOk = outputHashOf(text).toLowerCase() === h.toLowerCase();
+    let detail = !auth ? "private (no buyer token)" : text === null ? "text unavailable in the evidence store" : "";
+    if (text !== null && jobSalt) {
+      normOk = outCommitOf({ chainId, core: core0, jobId, jobSalt, text }).toLowerCase() === h.toLowerCase();
       try {
         validate(text, j.normSpec as NormSpec);
       } catch (e) {
@@ -108,10 +124,10 @@ export async function verifyJob(jobId: string, d: VerifyDeps): Promise<CheckResu
       }
     }
     texts.set(h.toLowerCase(), text);
-    add(`reveal by ${who.slice(0, 10)} (role ${Number(r.args.role)}) matches its seat`, okSeat, `outputHash ${h.slice(0, 18)}…`);
-    add(`text of ${who.slice(0, 10)} hashes to its outputHash and is normalized`, normOk, detail);
+    add(`reveal by ${who.slice(0, 10)} (role ${Number(r.args.role)}) matches its seat`, okSeat, `outCommit ${h.slice(0, 18)}...`);
+    add(`text of ${who.slice(0, 10)} opens its outCommit and is normalized`, normOk, detail);
   }
-  const hashOf = async (a: string) => (a === ZERO_ADDRESS ? null : String((await core.seat(jobId, a)).outputHash).toLowerCase());
+  const hashOf = async (a: string) => (a === ZERO_ADDRESS ? null : String((await core.seat(jobId, a)).outCommit).toLowerCase());
   const consistent = (a: string | null, b: string | null) => {
     if (!a || !b) return false;
     if (a === b) return true;
@@ -125,21 +141,21 @@ export async function verifyJob(jobId: string, d: VerifyDeps): Promise<CheckResu
   const cmp = find("Compared")[0];
   const he = await hashOf(j.executor);
   const hv = await hashOf(j.verifier);
-  if (cmp && he && hv) {
+  if (cmp && he && hv && (j.cls !== ModelClass.TOLERANCE || auth)) {
     const mine = consistent(he, hv);
     add("executor/verifier comparison recomputed", mine === Boolean(cmp.args.agree), `chain: agree=${cmp.args.agree}, overlap ${cmp.args.overlapBps}; recomputed agree=${mine}`);
   } else add("executor/verifier comparison recomputed", null, "no comparison on this job");
 
   // 6. committee majority
   const res = find("Resolved")[0];
-  if (res && Number(res.args.outcome) !== Outcome.Inconclusive && he && hv) {
+  if (res && Number(res.args.outcome) !== Outcome.Inconclusive && he && hv && (j.cls !== ModelClass.TOLERANCE || auth)) {
     const members: string[] = await core.committeeOf(jobId);
     let cE = 0;
     let cV = 0;
     for (const m of members) {
       const s = await core.seat(jobId, m);
       if (!s.revealed) continue;
-      const h = String(s.outputHash).toLowerCase();
+      const h = String(s.outCommit).toLowerCase();
       if (consistent(h, he)) cE++;
       if (consistent(h, hv)) cV++;
     }

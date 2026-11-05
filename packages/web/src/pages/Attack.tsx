@@ -9,7 +9,7 @@ const ROLES = [
   { v: 3, label: "as committee member" },
 ];
 
-export function AttackPage({ onJob }: { onJob: (id: string) => void }) {
+export function AttackPage({ onJob }: { onJob: (id: string, token?: string) => void }) {
   const [token, setToken] = useState("");
   const [operator, setOperator] = useState("all");
   const [behavior, setBehavior] = useState("garbage");
@@ -33,7 +33,7 @@ export function AttackPage({ onJob }: { onJob: (id: string) => void }) {
     const r = await fetch(`${GATEWAY}/demo/try`, { method: "POST", headers: auth, body: f });
     const j = await r.json();
     add(r.ok ? `job ${j.jobId}: ${j.status}, ${j.badge}` : `error: ${j.error}`);
-    if (j.jobId) onJob(j.jobId);
+    if (j.jobId) onJob(j.jobId, j.accessToken);
   };
 
   return (

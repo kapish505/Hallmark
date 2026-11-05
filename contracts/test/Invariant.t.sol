@@ -42,7 +42,7 @@ contract Handler is Test {
         bytes32 id = keccak256(abi.encode(ids.length, seed));
         vm.deal(gateway, p);
         vm.prank(gateway);
-        h.createJob{value: p}(id, address(uint160(0x1000 + ids.length)), keccak256("in"), model);
+        h.createJob{value: p}(id, address(uint160(0x1000 + ids.length)), keccak256("in"), keccak256(abi.encodePacked(_salt(id))), model);
         ids.push(id);
         openEscrow += p;
     }
@@ -66,10 +66,14 @@ contract Handler is Test {
         try h.withdraw() {} catch {}
     }
 
+    function _salt(bytes32 id) internal pure returns (bytes32) {
+        return keccak256(abi.encode("salt", id));
+    }
+
     function _commit(bytes32 id, address who, uint256 seed) internal {
         bytes memory t = texts[seed % 3];
         txt[id][who] = t;
-        bytes32 c = h.commitmentFor(id, who, keccak256(t), bytes32(uint256(uint160(who))));
+        bytes32 c = h.commitmentFor(id, who, h.outCommitFor(id, _salt(id), t), bytes32(uint256(uint160(who))));
         vm.prank(who);
         try h.commit(id, c) {} catch {}
     }
@@ -79,9 +83,9 @@ contract Handler is Test {
         bytes32 s = bytes32(uint256(uint160(who)));
         vm.prank(who);
         if (asText) {
-            try h.revealText(id, t, s, "r") {} catch {}
+            try h.revealText(id, t, _salt(id), s, "r") {} catch {}
         } else {
-            try h.reveal(id, keccak256(t), s, "r") {} catch {}
+            try h.reveal(id, h.outCommitFor(id, _salt(id), t), s, "r") {} catch {}
         }
     }
 
@@ -115,8 +119,8 @@ contract Handler is Test {
         } else if (st == Hallmark.Status.Text) {
             address who = seed % 2 == 0 ? j.executor : j.verifier;
             vm.prank(who);
-            try h.postText(id, txt[id][who]) {} catch {}
-            try h.compareTexts(id, txt[id][j.executor], txt[id][j.verifier]) {} catch {}
+            try h.postText(id, txt[id][who], _salt(id)) {} catch {}
+            try h.compareTexts(id, txt[id][j.executor], txt[id][j.verifier], _salt(id)) {} catch {}
         } else if (st == Hallmark.Status.CommitteeCommit) {
             address[] memory m = h.committeeOf(id);
             _commit(id, m[seed % m.length], seed >> 16);
@@ -134,7 +138,7 @@ contract Handler is Test {
                         all[2 + i] = txt[id][m[i]];
                     }
                 }
-                try h.resolve(id, all) {} catch {}
+                try h.resolve(id, all, _salt(id)) {} catch {}
             }
         }
         _track(id);

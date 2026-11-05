@@ -32,7 +32,7 @@ export interface JobView {
 export interface NetworkView {
   contract: string;
   params: Record<string, string | number>;
-  tasks: Array<{ task: string; modelKey: string; priceTinybar: string; bondTinybar: string; cls: number; tauBps: number; auditBps: number; available: boolean }>;
+  tasks: Array<{ task: string; modelKey: string; priceTinybar: string; bondTinybar: string; cls: number; tauBps: number; auditBps: number; expectedErrorBps: number; errorSampleSize: number; available: boolean }>;
   operators: Array<{ address: string; free: string; locked: string; control: boolean }>;
   pools: Record<string, string>;
   slashes: Array<{ who: string; amount: string; reason: string; jobId: string; link: string | null }>;

@@ -32,12 +32,27 @@ export interface OutputContext {
  * The normalized output an operator commits to, per behavior. Cheats exist only for the attack lab
  * and the e2e suite (section 9.2). null = do not commit at all ("silent").
  */
-export async function produceOutput(b: OperatorBehavior, ctx: OutputContext, w: Worker): Promise<string | null> {
+export interface Produced {
+  /** normalized text (what is committed) */
+  text: string;
+  /** engine output before normalization (advisory validators only) */
+  raw: string;
+}
+
+export async function produceOutput(b: OperatorBehavior, ctx: OutputContext, w: Worker): Promise<Produced | null> {
+  const t = await produceText(b, ctx, w);
+  if (t === null) return null;
+  return typeof t === "string" ? { text: t, raw: t } : t;
+}
+
+async function produceText(b: OperatorBehavior, ctx: OutputContext, w: Worker): Promise<string | Produced | null> {
   const norm = (raw: string) => normalize(raw, ctx.spec).text;
   switch (b) {
     case "honest":
-    case "no-reveal":
-      return norm(await w.run(ctx.task, ctx.input));
+    case "no-reveal": {
+      const raw = await w.run(ctx.task, ctx.input);
+      return { text: norm(raw), raw };
+    }
     case "lazy-small-model":
       return norm(ctx.task === "asr" ? await w.run("asr", ctx.input, { model: ctx.lazyModel }) : await w.run("ocr", ctx.input, { engine: "fast" }));
     case "lazy-engine":

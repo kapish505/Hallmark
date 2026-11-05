@@ -15,6 +15,9 @@ export const TaskInfo = z.object({
   tauBps: z.number(),
   auditBps: z.number(),
   available: z.boolean(),
+  /** add-on A2: pinned model's measured error (WER for asr, CER for ocr), informational only */
+  accuracy: z.object({ expectedErrorBps: z.number(), sampleSize: z.number(), metric: z.enum(["WER", "CER"]), measured: z.boolean() }),
+  validators: z.array(z.string()),
   limits: z.object({ maxBytes: z.number(), maxSeconds: z.number().optional(), maxPixels: z.number().optional() }),
 });
 export type TaskInfo = z.infer<typeof TaskInfo>;
@@ -35,6 +38,9 @@ export type Manifest = z.infer<typeof Manifest>;
 
 export const JobAccepted = z.object({
   jobId: z.string(),
+  /** bearer capability for the result, the job salt and the evidence (only the payer sees the 202) */
+  accessToken: z.string(),
+  validator: z.string(),
   task: z.enum(TASKS),
   inputHash: z.string(),
   statusUrl: z.string(),
@@ -83,14 +89,25 @@ export const OperatorBehavior = z.enum([
 ]);
 export type OperatorBehavior = z.infer<typeof OperatorBehavior>;
 
-/** Signed output upload (PUT /outputs/:jobId). The signature binds who/job/hash/text. */
+/**
+ * Signed output upload (PUT /v1/jobs/:id/outputs). The signature binds operator, job, outCommit and
+ * the raw text hash. `raw` (the engine's unnormalized text) feeds the advisory validators only.
+ */
 export const OutputUpload = z.object({
   jobId: z.string(),
   operator: z.string(),
-  outputHash: z.string(),
+  outCommit: z.string(),
   text: z.string(),
+  raw: z.string().max(8192).default(""),
   signature: z.string(),
 });
 export type OutputUpload = z.infer<typeof OutputUpload>;
-export const outputUploadMessage = (u: { jobId: string; operator: string; outputHash: string }) =>
-  `hallmark-output:${u.jobId}:${u.operator.toLowerCase()}:${u.outputHash}`;
+export const outputUploadMessage = (u: { jobId: string; operator: string; outCommit: string; rawHash: string }) =>
+  `hallmark-output:${u.jobId.toLowerCase()}:${u.operator.toLowerCase()}:${u.outCommit.toLowerCase()}:${u.rawHash.toLowerCase()}`;
+
+/**
+ * Signed read request for private evidence (job salt, input, outputs): headers
+ *   X-Hallmark-Address, X-Hallmark-Timestamp (unix s), X-Hallmark-Signature over readMessage(...).
+ * Accepted for operators holding a role on the job and for the gateway's listed watchers.
+ */
+export const readMessage = (jobId: string, address: string, ts: number) => `hallmark-read:${jobId.toLowerCase()}:${address.toLowerCase()}:${ts}`;

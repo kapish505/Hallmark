@@ -66,9 +66,10 @@ export class Keeper {
       case Status.Text: {
         const [se, sv] = await Promise.all([core.seat(jobId, j.executor), core.seat(jobId, j.verifier)]);
         if (se.textPosted && sv.textPosted) {
-          const te = this.d.db.outputByHash(se.outputHash);
-          const tv = this.d.db.outputByHash(sv.outputHash);
-          if (te !== null && tv !== null) return this.send("compareTexts", [jobId, toUtf8Bytes(te), toUtf8Bytes(tv)], true);
+          const te = this.d.db.outputByCommit(jobId, se.outCommit);
+          const tv = this.d.db.outputByCommit(jobId, sv.outCommit);
+          const salt = this.d.db.job(jobId)!.job_salt;
+          if (te && tv) return this.send("compareTexts", [jobId, toUtf8Bytes(te.text), toUtf8Bytes(tv.text), salt], true);
         }
         if (late) return this.send("expire", [jobId]);
         return;
@@ -82,12 +83,13 @@ export class Keeper {
           const seats = await Promise.all(parties.map((a) => core.seat(jobId, a)));
           texts = seats.map((s, i) => {
             if (i >= 2 && !s.revealed) return new Uint8Array();
-            const t = this.d.db.outputByHash(s.outputHash);
-            if (t === null) throw new Error(`text for ${s.outputHash} not available yet`);
-            return toUtf8Bytes(t);
+            const t = this.d.db.outputByCommit(jobId, s.outCommit);
+            if (!t) throw new Error(`text for ${s.outCommit} not available yet`);
+            return toUtf8Bytes(t.text);
           });
         }
-        return this.send("resolve", [jobId, texts.map((t) => getBytes(t))], true);
+        const salt = j.cls === ModelClass.TOLERANCE ? this.d.db.job(jobId)!.job_salt : "0x" + "00".repeat(32);
+        return this.send("resolve", [jobId, texts.map((t) => getBytes(t)), salt], true);
       }
       default:
         if (late && j.status !== Status.Committed) return this.send("expire", [jobId]);

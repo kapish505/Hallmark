@@ -13,6 +13,8 @@ const task = (t: "asr" | "ocr", price: string) => ({
   tauBps: 0,
   auditBps: 3000,
   available: true,
+  accuracy: { expectedErrorBps: 0, sampleSize: 0, metric: "WER" as const, measured: false },
+  validators: ["none"],
   limits: { maxBytes: 1_000_000 },
 });
 const manifest: Manifest = {

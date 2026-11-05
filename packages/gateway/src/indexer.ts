@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { JsonRpcProvider } from "ethers";
-import { ifaces, logger, outputHashOf, Role, SlashReason, statusName, type ChainEvent, type LogSource } from "@hallmark/shared";
+import { ifaces, logger, outCommitOf, Role, SlashReason, statusName, type ChainEvent, type LogSource } from "@hallmark/shared";
 import type { Db } from "./db.js";
 
 const log = logger("indexer");
@@ -31,7 +31,7 @@ export class Indexer {
   private gen = 0;
 
   constructor(
-    private readonly d: { db: Db; source: LogSource; pollMs: number; cursorKey: string; provider: JsonRpcProvider | null },
+    private readonly d: { db: Db; source: LogSource; pollMs: number; cursorKey: string; provider: JsonRpcProvider | null; chainId: number; core: string },
   ) {
     this.bus.setMaxListeners(1000);
   }
@@ -115,7 +115,10 @@ export class Indexer {
       const p = ifaces.core.parseTransaction({ data: tx.data });
       if (!p || (p.name !== "postText" && p.name !== "revealText")) return;
       const text = new TextDecoder().decode(Buffer.from(String(p.args[1]).slice(2), "hex"));
-      this.d.db.putOutput({ job_id: String(a.jobId), operator: String(a.who), output_hash: outputHashOf(text), text, source: "calldata" });
+      const row = this.d.db.job(String(a.jobId));
+      if (!row) return;
+      const out = outCommitOf({ chainId: this.d.chainId, core: this.d.core, jobId: String(a.jobId), jobSalt: row.job_salt, text });
+      this.d.db.putOutput({ job_id: String(a.jobId), operator: String(a.who), out_commit: out, text, raw: "", source: "calldata" });
     } catch (err) {
       log.warn("could not recover text from calldata", { tx: e.txHash, error: String(err) });
     }

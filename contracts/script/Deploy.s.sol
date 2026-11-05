@@ -10,7 +10,8 @@ import {ModelRegistry} from "../src/ModelRegistry.sol";
 ///         print both bond limits per model. Refuses to enable a model whose window is empty.
 ///   env: PRIVATE_KEY (owner), GATEWAY_ADDRESS
 ///   optional per model X in {ASR, OCR}: X_ENABLE=true, X_CLASS (0 exact|1 tolerance), X_TAU_BPS,
-///     X_FEE, X_C, X_MARGIN, X_PI_BPS, X_FP_BPS, X_MAX_WORDS, X_DIGEST, X_HW
+///     X_FEE, X_C, X_MARGIN, X_PI_BPS, X_FP_BPS, X_MAX_WORDS, X_DIGEST, X_HW, X_ERROR_BPS, X_ERROR_N
+///   X_C and X_PI_BPS are the WORST cheat's values (max of c'/(p*pi') - F over the G3 cheat set).
 ///   Values must come from docs/MEASUREMENTS.md (G3); nothing is enabled by default.
 contract Deploy is Script {
     function run() external {
@@ -47,6 +48,8 @@ contract Deploy is Script {
         m.fee = uint128(vm.envUint(string.concat(k, "_FEE")));
         m.cTinybar = uint128(vm.envUint(string.concat(k, "_C")));
         m.marginTinybar = uint128(vm.envUint(string.concat(k, "_MARGIN")));
+        m.expectedErrorBps = uint16(vm.envOr(string.concat(k, "_ERROR_BPS"), uint256(0))); // A2, informational
+        m.errorSampleSize = uint32(vm.envOr(string.concat(k, "_ERROR_N"), uint256(0)));
         m.runtimeDigest = vm.envOr(string.concat(k, "_DIGEST"), bytes32(0));
         m.hwClass = vm.envOr(string.concat(k, "_HW"), bytes32(0));
         Hallmark.Params memory p = h.getParams();

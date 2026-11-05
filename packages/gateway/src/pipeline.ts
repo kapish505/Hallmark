@@ -75,7 +75,7 @@ export class Pipeline {
         const receipt = await this.d.sender.send(
           this.d.contracts.core,
           "createJob",
-          [jobId, buyer, row.input_hash, row.model_id],
+          [jobId, buyer, row.input_hash, row.salt_commit, row.model_id],
           { value: toWire(BigInt(row.price), this.d.units), gasLimit: this.d.gasLimitHeavy, label: "createJob" },
         );
         this.d.db.update(jobId, { payment_status: "Created", create_tx: receipt.hash });

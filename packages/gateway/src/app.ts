@@ -1,6 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import multer from "multer";
-import { keccak256, verifyMessage } from "ethers";
+import { hexlify, keccak256, randomBytes, verifyMessage } from "ethers";
 import {
   badgeFor,
   checkCanonicalWav,
@@ -15,8 +15,13 @@ import {
   NormError,
   OperatorBehavior,
   OutputUpload,
-  outputHashOf,
+  outCommitOf,
   outputUploadMessage,
+  parseValidator,
+  readMessage,
+  runValidator,
+  saltCommitOf,
+  ValidatorError,
   TASK_ENDPOINT,
   validate,
   VERSION,
@@ -42,8 +47,15 @@ export interface TaskConfig {
   tauBps: number;
   normSpec: NormSpec;
   auditBps: number;
+  expectedErrorBps: number;
+  errorSampleSize: number;
   available: boolean;
 }
+
+const VALIDATORS: Record<Task, string[]> = {
+  asr: ["none", "min_words:<n>", "date_iso"],
+  ocr: ["none", "min_words:<n>", "date_iso", "amount_present", "invoice_total"],
+};
 
 export interface AppDeps {
   db: Db;
@@ -68,6 +80,8 @@ export interface AppDeps {
     demoMode: boolean;
     demoControlToken?: string;
     operatorControl: Record<string, string>;
+    /** extra readers of private evidence (add-on A1), lower-case addresses */
+    watchers: string[];
   };
   /** demo-sponsored "Try it" payer (optional, labelled in the UI) */
   tryIt?: (task: Task, bytes: Uint8Array) => Promise<unknown>;
@@ -129,6 +143,8 @@ export function createApp(d: AppDeps) {
         tauBps: t.tauBps,
         auditBps: t.auditBps,
         available: t.available,
+        accuracy: { expectedErrorBps: t.expectedErrorBps, sampleSize: t.errorSampleSize, metric: t.task === "asr" ? "WER" : "CER", measured: t.errorSampleSize > 0 },
+        validators: VALIDATORS[t.task],
         limits:
           t.task === "asr"
             ? { maxBytes: cfg.maxAudioBytes, maxSeconds: cfg.maxAudioSeconds }
@@ -179,6 +195,13 @@ export function createApp(d: AppDeps) {
           } catch (e) {
             return void res.status(415).json({ error: e instanceof MediaError ? e.message : "unreadable input" });
           }
+          let validator;
+          try {
+            validator = parseValidator(typeof req.body?.validator === "string" ? req.body.validator : undefined);
+          } catch (e) {
+            return void res.status(400).json({ error: e instanceof ValidatorError ? e.message : "bad validator" });
+          }
+          if (!VALIDATORS[task].some((v) => v.split(":")[0] === validator.name)) return void res.status(400).json({ error: `validator ${validator.name} is not offered for ${task}` });
           const paymentHeader = req.header("payment-signature") ?? req.header("x-payment");
           if (!paymentHeader) return void res.status(402).json({ error: "missing payment header" });
           const inputHash = inputHashOf(bytes);
@@ -192,7 +215,22 @@ export function createApp(d: AppDeps) {
           if (!available) return void res.status(503).json({ error: "not enough bonded operators right now; you were not charged" });
 
           d.blobs.put(bytes);
-          const row = db.insertPending({ jobId, paymentKey, task, modelId: t.modelId, inputHash, bytes: bytes.length, meta, price: t.priceTinybar });
+          // add-on A1: a fresh job salt; only its hash goes on chain
+          const jobSalt = hexlify(randomBytes(32));
+          const row = db.insertPending({
+            jobId,
+            paymentKey,
+            task,
+            modelId: t.modelId,
+            inputHash,
+            bytes: bytes.length,
+            meta,
+            price: t.priceTinybar,
+            jobSalt,
+            saltCommit: saltCommitOf(jobSalt),
+            accessToken: hexlify(randomBytes(24)),
+            validator: validator.name === "min_words" ? `min_words:${validator.arg}` : validator.name,
+          });
           res.status(202).json(accepted(row));
         } catch (e) {
           log.error("task handler failed", { task, error: String(e) });
@@ -202,9 +240,12 @@ export function createApp(d: AppDeps) {
     );
   }
 
+  /** only the payer receives the 202, so it carries the bearer capability for this job */
   function accepted(r: JobRow) {
     return {
       jobId: r.job_id,
+      accessToken: r.access_token,
+      validator: r.validator,
       task: r.task,
       inputHash: r.input_hash,
       statusUrl: `${cfg.publicUrl}/v1/jobs/${r.job_id}`,
@@ -214,11 +255,6 @@ export function createApp(d: AppDeps) {
   }
 
   // ---------------------------------------------------------------- job views
-  function executorHash(r: JobRow): string | null {
-    const ev = db.events(r.job_id).find((e) => e.name === "Revealed" && JSON.parse(e.args).who?.toLowerCase() === r.executor?.toLowerCase());
-    return ev ? String(JSON.parse(ev.args).outputHash) : null;
-  }
-
   function view(r: JobRow) {
     const events = db.events(r.job_id).map((e) => ({ name: e.name, args: JSON.parse(e.args), tx: e.tx_hash, link: link(e.tx_hash), position: e.position }));
     const status = r.chain_status ?? r.payment_status;
@@ -263,17 +299,110 @@ export function createApp(d: AppDeps) {
     res.json(view(r));
   });
 
-  /** provisional until settled; 409 while disputed; 410 if refunded (section 9.1) */
-  app.get("/v1/jobs/:id/result", (req, res) => {
+  // ---------------------------------------------------------------- private evidence access (add-on A1)
+  /** "buyer" (bearer token), "operator" (signed, holds a role on the job), "watcher" (signed, listed) */
+  async function who(req: Request, r: JobRow): Promise<{ kind: "buyer" | "operator" | "watcher"; address?: string } | null> {
+    const bearer = (req.header("authorization") ?? "").replace(/^Bearer\s+/i, "") || String(req.query.token ?? "");
+    if (bearer && bearer === r.access_token) return { kind: "buyer" };
+    const address = req.header("x-hallmark-address");
+    const ts = Number(req.header("x-hallmark-timestamp"));
+    const sig = req.header("x-hallmark-signature");
+    if (!address || !sig || !Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 120) return null;
+    try {
+      if (verifyMessage(readMessage(r.job_id, address, ts), sig).toLowerCase() !== address.toLowerCase()) return null;
+    } catch {
+      return null;
+    }
+    if (cfg.watchers.includes(address.toLowerCase())) return { kind: "watcher", address };
+    const seat = await d.contracts.core.seat(r.job_id, address);
+    return Number(seat.role) !== 0 ? { kind: "operator", address } : null;
+  }
+  const guard = async (req: Request, res: Response) => {
     const r = db.job(req.params.id);
     if (!r) return void res.status(404).json({ error: "unknown job" });
+    const w = await who(req, r).catch(() => null);
+    if (!w) return void res.status(403).json({ error: "only the buyer, operators holding a role on this job, or listed watchers may read this" });
+    return { r, w };
+  };
+
+  app.get("/v1/jobs/:id/salt", async (req, res) => {
+    const g = await guard(req, res);
+    if (g) res.json({ jobSalt: g.r.job_salt, saltCommit: g.r.salt_commit });
+  });
+  app.get("/v1/jobs/:id/input", async (req, res) => {
+    const g = await guard(req, res);
+    if (!g) return;
+    const b = d.blobs.get(g.r.input_hash);
+    if (!b) return void res.status(404).json({ error: "input not stored" });
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.send(Buffer.from(b));
+  });
+  app.get("/v1/jobs/:id/outputs/:operator", async (req, res) => {
+    const g = await guard(req, res);
+    if (!g) return;
+    const o = db.output(g.r.job_id, req.params.operator);
+    if (!o) return void res.status(404).json({ error: "no output from this operator" });
+    res.json({ text: o.text, outCommit: o.out_commit });
+  });
+
+  /** operator-signed upload, accepted only for a revealed seat whose outCommit this text opens */
+  app.put("/v1/jobs/:id/outputs", express.json({ limit: "32kb" }), async (req, res) => {
+    const p = OutputUpload.safeParse(req.body);
+    const r = db.job(req.params.id);
+    if (!p.success || !r || p.data.jobId.toLowerCase() !== r.job_id.toLowerCase()) return void res.status(400).json({ error: "bad upload" });
+    const u = p.data;
+    try {
+      const rawHash = keccak256(new TextEncoder().encode(u.raw));
+      const signer = verifyMessage(outputUploadMessage({ jobId: u.jobId, operator: u.operator, outCommit: u.outCommit, rawHash }), u.signature);
+      if (signer.toLowerCase() !== u.operator.toLowerCase()) return void res.status(401).json({ error: "bad signature" });
+      if (outCommitOf({ chainId: cfg.chainId, core: cfg.contract, jobId: r.job_id, jobSalt: r.job_salt, text: u.text }).toLowerCase() !== u.outCommit.toLowerCase()) {
+        return void res.status(400).json({ error: "text does not open outCommit" });
+      }
+      const job = await d.contracts.core.getJob(u.jobId);
+      validate(u.text, Number(job.normSpec) as NormSpec);
+      const seat = await d.contracts.core.seat(u.jobId, u.operator);
+      if (!seat.revealed || String(seat.outCommit).toLowerCase() !== u.outCommit.toLowerCase()) return void res.status(409).json({ error: "no revealed seat with this commitment" });
+      db.putOutput({ job_id: u.jobId, operator: u.operator, out_commit: u.outCommit, text: u.text, raw: u.raw, source: "upload" });
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(400).json({ error: e instanceof NormError ? `${e.code}: ${e.message}` : String(e) });
+    }
+  });
+
+  /**
+   * Buyer only. provisional until settled; 409 while disputed; 410 if refunded (section 9.1).
+   * Returns jobSalt so the buyer can recompute outCommit and compare it with the chain.
+   */
+  app.get("/v1/jobs/:id/result", async (req, res) => {
+    const r = db.job(req.params.id);
+    if (!r) return void res.status(404).json({ error: "unknown job" });
+    const w = await who(req, r).catch(() => null);
+    if (w?.kind !== "buyer") return void res.status(403).json({ error: "the result is readable only with the buyer's access token" });
     const v = view(r);
+    const t = d.tasks().find((x) => x.task === r.task);
+    const accuracy = t ? { expectedErrorBps: t.expectedErrorBps, sampleSize: t.errorSampleSize, metric: r.task === "asr" ? "WER" : "CER", label: t.errorSampleSize > 0 ? `pinned model, measured error ${(t.expectedErrorBps / 100).toFixed(1)}% on ${t.errorSampleSize} samples` : "pinned model, error rate not measured yet" } : null;
     if (v.status === "Refunded" || r.payment_status === "Rejected") return void res.status(410).json({ error: "refunded", badge: v.badge, refundLink: v.payment.refundLink });
     if (["Text", "CommitteeCommit", "CommitteeReveal"].includes(v.status)) return void res.status(409).json({ error: "disputed: the committee is re-running this job", badge: v.badge });
-    const h = executorHash(r);
-    const text = h ? db.outputByHash(h) : null;
-    if (!h || text === null) return void res.status(202).json({ status: v.status, badge: v.badge, final: false });
-    res.json({ jobId: r.job_id, task: r.task, text, outputHash: h, provisional: v.status !== "Settled", final: v.status === "Settled", badge: v.badge, status: v.status });
+    const exec = r.executor ? db.output(r.job_id, r.executor) : null;
+    const seat = r.executor ? await d.contracts.core.seat(r.job_id, r.executor).catch(() => null) : null;
+    if (!exec || !seat?.revealed || String(seat.outCommit).toLowerCase() !== exec.out_commit) return void res.status(202).json({ status: v.status, badge: v.badge, final: false });
+    const validator = parseValidator(r.validator);
+    res.json({
+      jobId: r.job_id,
+      task: r.task,
+      text: exec.text,
+      outCommit: exec.out_commit,
+      jobSalt: r.job_salt,
+      provisional: v.status !== "Settled",
+      final: v.status === "Settled",
+      badge: v.badge,
+      status: v.status,
+      validator: r.validator,
+      validated: runValidator(validator, exec.raw || exec.text),
+      validatorNote: "advisory: checks the raw output; no money effect",
+      accuracy,
+      claim: "faithful to the pinned model (checked on a sample); not a guarantee that the text is correct",
+    });
   });
 
   app.get("/v1/jobs/:id/events", (req, res) => {
@@ -290,40 +419,6 @@ export function createApp(d: AppDeps) {
       clearInterval(ping);
       d.indexer.bus.off("event", on);
     });
-  });
-
-  // ---------------------------------------------------------------- evidence store (G4)
-  app.get("/inputs/:hash", (req, res) => {
-    const b = /^0x[0-9a-fA-F]{64}$/.test(req.params.hash) ? d.blobs.get(req.params.hash) : null;
-    if (!b) return void res.status(404).json({ error: "unknown input" });
-    res.setHeader("Content-Type", "application/octet-stream");
-    res.send(Buffer.from(b));
-  });
-
-  /** operator-signed output upload; accepted only for a revealed seat whose hash matches */
-  app.put("/outputs/:jobId", express.json({ limit: "16kb" }), async (req, res) => {
-    const p = OutputUpload.safeParse(req.body);
-    if (!p.success || p.data.jobId.toLowerCase() !== req.params.jobId.toLowerCase()) return void res.status(400).json({ error: "bad upload" });
-    const u = p.data;
-    try {
-      const signer = verifyMessage(outputUploadMessage(u), u.signature);
-      if (signer.toLowerCase() !== u.operator.toLowerCase()) return void res.status(401).json({ error: "bad signature" });
-      if (outputHashOf(u.text).toLowerCase() !== u.outputHash.toLowerCase()) return void res.status(400).json({ error: "text does not match outputHash" });
-      const job = await d.contracts.core.getJob(u.jobId);
-      validate(u.text, Number(job.normSpec) as NormSpec);
-      const seat = await d.contracts.core.seat(u.jobId, u.operator);
-      if (!seat.revealed || String(seat.outputHash).toLowerCase() !== u.outputHash.toLowerCase()) return void res.status(409).json({ error: "no revealed seat with this hash" });
-      db.putOutput({ job_id: u.jobId, operator: u.operator, output_hash: u.outputHash, text: u.text, source: "upload" });
-      res.json({ ok: true });
-    } catch (e) {
-      res.status(400).json({ error: e instanceof NormError ? `${e.code}: ${e.message}` : String(e) });
-    }
-  });
-
-  app.get("/outputs/by-hash/:hash", (req, res) => {
-    const t = db.outputByHash(req.params.hash);
-    if (t === null) return void res.status(404).json({ error: "unknown output" });
-    res.type("text/plain").send(t);
   });
 
   // ---------------------------------------------------------------- network

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ChildProcess } from "node:child_process";
 import { JsonRpcProvider, NonceManager, Wallet, keccak256 } from "ethers";
-import { connect, ifaces, modelIdOf, readJob, Role, RpcLogSource, Status, TxSender } from "@hallmark/shared";
+import { connect, ifaces, modelIdOf, readJob, Role, RpcLogSource, saltCommitOf, Status, TxSender } from "@hallmark/shared";
 import { Operator, PendingStore, StateFile, type EvidenceClient } from "../src/index.js";
 import { ASR_KEY, deployAll, devKey, startAnvil, synthWav, type Deployment } from "../../../scripts/local/chain.js";
 import { FakeWorker } from "../../../scripts/local/fakes.js";
@@ -12,7 +12,9 @@ import { FakeWorker } from "../../../scripts/local/fakes.js";
 let anvil: { proc: ChildProcess; url: string; provider: JsonRpcProvider };
 let dep: Deployment;
 const input = synthWav(1, 321);
-const evidence = { input: async () => input, upload: async () => {}, outputByHash: async () => null } as unknown as EvidenceClient;
+const JOB_SALT = "0x" + "5a".repeat(32);
+let servedSalt = JOB_SALT;
+const evidence = { salt: async () => servedSalt, input: async () => input, upload: async () => {}, output: async () => null } as unknown as EvidenceClient;
 
 beforeAll(async () => {
   anvil = await startAnvil(19545 + Math.floor(Math.random() * 1000));
@@ -52,7 +54,7 @@ describe("operator crash recovery (section 9.2)", () => {
     const gwc = connect(dep, new NonceManager(new Wallet(devKey(1), anvil.provider)));
     const id = keccak256(new TextEncoder().encode("crash-test"));
     const [price] = await gwc.core.quote(modelIdOf(ASR_KEY));
-    await (await gwc.core.createJob(id, new Wallet(devKey(12)).address, keccak256(input), modelIdOf(ASR_KEY), { value: price })).wait();
+    await (await gwc.core.createJob(id, new Wallet(devKey(12)).address, keccak256(input), saltCommitOf(JOB_SALT), modelIdOf(ASR_KEY), { value: price, gasLimit: 3_000_000 })).wait();
     const j = await readJob(gwc.core, id);
     const key = [2, 3, 4, 5, 6].map(devKey).find((k) => new Wallet(k).address === j.executor)!;
     const dir = mkdtempSync(join(tmpdir(), "hallmark-op-"));
@@ -71,7 +73,25 @@ describe("operator crash recovery (section 9.2)", () => {
     await second.recover();
     const s = await gwc.core.seat(id, j.executor);
     expect(s.revealed).toBe(true);
-    expect(s.outputHash).toBe(rec.outputHash);
+    expect(s.outCommit).toBe(rec.outCommit);
     expect((await readJob(gwc.core, id)).status).toBe(Status.Challenge);
+  }, 60_000);
+
+  it("edge case 29: refuses a job whose served salt does not match the on-chain saltCommit", async () => {
+    const gwc = connect(dep, new NonceManager(new Wallet(devKey(1), anvil.provider)));
+    const id = keccak256(new TextEncoder().encode("salt-test"));
+    const [price] = await gwc.core.quote(modelIdOf(ASR_KEY));
+    await (await gwc.core.createJob(id, new Wallet(devKey(12)).address, keccak256(input), saltCommitOf(JOB_SALT), modelIdOf(ASR_KEY), { value: price, gasLimit: 3_000_000 })).wait();
+    const j = await readJob(gwc.core, id);
+    const key = [2, 3, 4, 5, 6].map(devKey).find((k) => new Wallet(k).address === j.executor)!;
+    const dir = mkdtempSync(join(tmpdir(), "hallmark-op-"));
+    servedSalt = "0x" + "66".repeat(32);
+    try {
+      await makeOperator(key, dir).take(id, Role.Executor);
+    } finally {
+      servedSalt = JOB_SALT;
+    }
+    expect(new PendingStore(dir).get(id)).toBeNull();
+    expect((await readJob(gwc.core, id)).status).toBe(Status.Assigned);
   }, 60_000);
 });

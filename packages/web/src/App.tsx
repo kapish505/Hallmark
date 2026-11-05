@@ -13,11 +13,13 @@ type Tab = (typeof TABS)[number];
 export function App() {
   const [tab, setTab] = useState<Tab>("Try it");
   const [jobId, setJobId] = useState(() => new URLSearchParams(location.search).get("job") ?? "");
+  const [token, setToken] = useState(() => new URLSearchParams(location.search).get("token") ?? "");
   useEffect(() => {
-    if (jobId) history.replaceState(null, "", `?job=${jobId}`);
-  }, [jobId]);
-  const openJob = (id: string) => {
+    if (jobId) history.replaceState(null, "", `?job=${jobId}${token ? `&token=${token}` : ""}`);
+  }, [jobId, token]);
+  const openJob = (id: string, tok?: string) => {
     setJobId(id);
+    setToken(tok ?? "");
     setTab("Job");
   };
   return (
@@ -41,7 +43,7 @@ export function App() {
         {tab === "Job" && (
           <>
             <input className="jobinput mono" placeholder="0x… job id" value={jobId} onChange={(e) => setJobId(e.target.value.trim())} />
-            <JobPage jobId={jobId} />
+            <JobPage jobId={jobId} token={token} />
           </>
         )}
         {tab === "Network" && <NetworkPage />}

@@ -106,6 +106,16 @@
             "internalType": "uint16"
           },
           {
+            "name": "expectedErrorBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "errorSampleSize",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
             "name": "runtimeDigest",
             "type": "bytes32",
             "internalType": "bytes32"
@@ -268,6 +278,16 @@
             "internalType": "uint16"
           },
           {
+            "name": "expectedErrorBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "errorSampleSize",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
             "name": "runtimeDigest",
             "type": "bytes32",
             "internalType": "bytes32"
@@ -359,6 +379,16 @@
             "name": "fpBps",
             "type": "uint16",
             "internalType": "uint16"
+          },
+          {
+            "name": "expectedErrorBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "errorSampleSize",
+            "type": "uint32",
+            "internalType": "uint32"
           },
           {
             "name": "runtimeDigest",
@@ -480,6 +510,16 @@
             "name": "fpBps",
             "type": "uint16",
             "internalType": "uint16"
+          },
+          {
+            "name": "expectedErrorBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "errorSampleSize",
+            "type": "uint32",
+            "internalType": "uint32"
           },
           {
             "name": "runtimeDigest",
