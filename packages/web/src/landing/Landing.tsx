@@ -2,7 +2,7 @@ import { useState } from "react";
 import { PulseDiagram, type DEdge, type DFlash, type DNode, type DStep } from "./PulseDiagram";
 import "./landing.css";
 
-const CORE = "0xb719b79bdEfcaE9fD981ebc9b545419645FAd1c4";
+const CORE = "0x4Ae8e841fD17c70F9E1628e4a0121944288c46CE";
 const HASHSCAN = `https://hashscan.io/testnet/contract/${CORE}`;
 
 /* ------------------------------------------------------------------ hero network */

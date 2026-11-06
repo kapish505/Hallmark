@@ -1,19 +1,57 @@
 # Hallmark
 
-**Verified AI inference that agents can pay for.** Agents pay per request over [x402](https://x402.org) on Hedera.
-Bonded operators run pinned models, a second operator re-runs a random sample of jobs, and a wrong answer costs the
-operator its bond and refunds the buyer.
+**Hallmark is a protocol, not an app.** Any service or contract can ask for work and get a verdict, and
+bonded operators do the work. x402 on Hedera is one way to feed it. Today it is live for two model types:
+speech-to-text (Whisper large-v3) and OCR (Tesseract 5).
 
-Live models today: speech-to-text (Whisper large-v3) and OCR (Tesseract 5).
+**The claim:** verification for any model whose output we can reproduce; adding one means measuring it.
+A verdict says the output matches the pinned model. It does not say the output is true.
+
+## The core
+
+| Piece | What it is |
+|---|---|
+| Contracts | `Hallmark` (escrow, bonds, draws, audits, committee, slashing), `ModelRegistry`, `HallmarkJudge`, and `HallmarkVerdict`, which implements `IHallmarkVerdict` for other contracts to read |
+| Operators | bonded nodes that run pinned model containers and serve executor, verifier and committee seats |
+| Model manifests | `models/*.json`: one file per model, with every number set by calibration |
+| Evidence store | holds inputs, salts and outputs for the parties of a job; checked against on-chain hashes |
+
+Clients on top: the x402 gateway, the buyer agent, `hallmark-verify`, and the web console. Extras: the
+challenger bot, canary jobs, advisory validators, and the demo attack lab.
+
+## Ten lines: a service creates a job on the contract and reads the verdict
+
+```js
+import { readFileSync } from "node:fs";
+import { JsonRpcProvider, Wallet } from "ethers";
+import { HallmarkClient } from "@hallmark/sdk";
+import { hederaTestnet as c } from "@hallmark/contracts";
+
+const signer = new Wallet(process.env.KEY, new JsonRpcProvider("https://testnet.hashio.io/api", 296));
+const hm = new HallmarkClient({ signer, contracts: { hallmark: c.HALLMARK_ADDRESS, verdict: c.VERDICT_ADDRESS }, evidenceUrl: process.env.EVIDENCE_URL });
+const job = await hm.createJob({ modelKey: "OCR_V1", input: readFileSync("receipt.png") }); // you pay the contract
+const v = await hm.waitForVerdict(job.jobId);    // FinalAudited | FinalUnaudited | AuditSkipped | ExecutorSlashed | Refunded | Voided
+console.log(v.verdict, (await hm.result(job)).text); // the text is checked against the executor's on-chain commitment
+```
+
+Only `FinalAudited` means a second operator re-ran the job; `FinalUnaudited` and `AuditSkipped` are backed
+by the bond but not checked. The packages are 0.x alpha tarballs built by `npx tsx scripts/pack-core.ts`
+(not published to npm). `scripts/smoke-core.sh` installs only those tarballs in an empty directory and runs
+this example on testnet.
+
+Docs: [Integrate](docs/INTEGRATE.md) · [Run an operator](docs/RUN_AN_OPERATOR.md) ·
+[Add a model](docs/ADD_A_MODEL.md) · [Core map](docs/CORE_MAP.md)
 
 | | |
 |---|---|
 | Network | Hedera testnet (chain 296) |
-| Hallmark | [`0xb719b79bdEfcaE9fD981ebc9b545419645FAd1c4`](https://hashscan.io/testnet/contract/0xb719b79bdEfcaE9fD981ebc9b545419645FAd1c4) |
-| ModelRegistry | [`0x252A9478e703524aFe022C407e6C61ee27633282`](https://hashscan.io/testnet/contract/0x252A9478e703524aFe022C407e6C61ee27633282) |
-| HallmarkJudge | [`0x883b674a9050bf8e1531116A3AA524b08983bd46`](https://hashscan.io/testnet/contract/0x883b674a9050bf8e1531116A3AA524b08983bd46) |
+| Hallmark | [`0x4Ae8e841fD17c70F9E1628e4a0121944288c46CE`](https://hashscan.io/testnet/contract/0x4Ae8e841fD17c70F9E1628e4a0121944288c46CE) |
+| HallmarkVerdict | [`0x16E332bC16DB931e65cF14e28E57E80f18897be2`](https://hashscan.io/testnet/contract/0x16E332bC16DB931e65cF14e28E57E80f18897be2) |
+| ModelRegistry | [`0x5902c6e3020297B6Bf47bFf050357Df9108a234f`](https://hashscan.io/testnet/contract/0x5902c6e3020297B6Bf47bFf050357Df9108a234f) |
+| HallmarkJudge | [`0x7897772347d5C5F5De067FbF0129b387a9E7d069`](https://hashscan.io/testnet/contract/0x7897772347d5C5F5De067FbF0129b387a9E7d069) |
 
-All three are verified on Sourcify.
+All four are verified on Sourcify (exact match). The first deployment (`0xb719…d1c4`, gateway-only
+`createJob`) is retired; the payment below was settled on it.
 
 **First settled x402 payment on Hedera:** [`0.0.7162784@1793957837.218925989`](https://hashscan.io/testnet/transaction/0.0.7162784%401793957837.218925989)
 (OCR job [`0xe741…b61b`](https://hashscan.io/testnet/transaction/0x67c112c5928da74ff4705fb45f67190c82e294609bd68c175ae39ebe952b717d):
@@ -71,19 +109,24 @@ Fairness:    B ≤ m / (p · fp)
 ### Repository
 
 ```
+models/                  one manifest per model (ASR_V1, OCR_V1)
 contracts/               Foundry project
-  src/                   Hallmark.sol, ModelRegistry.sol, HallmarkJudge.sol, libs/, Probe.sol
-  script/Deploy.s.sol    deployment with the bond-window check
+  src/                   Hallmark, ModelRegistry, HallmarkJudge, HallmarkVerdict, IHallmarkVerdict, libs/
+  examples/              ExampleConsumer.sol (pays only on FinalAudited; example only)
+  script/Deploy.s.sol    deploys and links the contracts (models are registered from manifests)
   flat/                  single-file sources (Remix, verification)
 packages/
+  contracts/             @hallmark/contracts: ABIs, testnet addresses
+  model-spec/            @hallmark/model-spec: manifest schema, hallmark-calibrate, hallmark-models
+  sdk/                   @hallmark/sdk: createJob direct to the contract, verdicts, checked results
+  operator/              @hallmark/operator: hallmark-operator init/run/status, challenger bot, model workers
   shared/                units, normalization, overlap, bond math, commitments, validators, types
-  gateway/               x402 routes, job salts, settlement check, createJob, refunds, indexer, keeper, evidence API
-  operator/              executor/verifier/committee orchestrator, challenger bot, worker/asr, worker/ocr
-  buyer-agent/           CLI and library with spend policy and commitment check
+  gateway/               x402 client + evidence store: routes, settlement, refunds, indexer, keeper
+  buyer-agent/           x402 CLI and library with spend policy and commitment check
   verifier/              hallmark-verify: re-derives a job's verdict from public data
   simulator/             bond-window calculator
   web/                   landing page (/) and console (/console) with Hedera wallet payments
-scripts/                 model calibration, account setup, ABI generation
+scripts/                 pack-core, smoke-core.sh, scan-model-constants, account setup, ABI generation
 ```
 
 | Layer | Stack |
@@ -132,7 +175,9 @@ pnpm web                             # http://localhost:5173
    npx tsx scripts/setup-accounts.ts --internal --fund --demo
    ```
    This creates the gateway, 5 operators, a challenger and a canary buyer, and funds them from the deployer.
-2. Register models with measured values (`scripts/calibrate.ts`, then `ModelRegistry.setModel`).
+2. Deploy (`forge script script/Deploy.s.sol`), then register each model from its manifest:
+   `hallmark-calibrate`, `hallmark-models propose`, and `hallmark-models enable` from the owner
+   (see [Add a model](docs/ADD_A_MODEL.md)).
 3. Start the services:
    ```bash
    pnpm gateway

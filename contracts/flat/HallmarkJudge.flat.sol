@@ -147,3 +147,4 @@ contract HallmarkJudge {
         return Overlap.bps(TextNorm.wordHashes(a), TextNorm.wordHashes(b));
     }
 }
+

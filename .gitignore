@@ -45,7 +45,6 @@ docs/*
 !docs/INTEGRATE.md
 !docs/RUN_AN_OPERATOR.md
 !docs/ADD_A_MODEL.md
-!docs/LIMITS.md
 
 # packed alpha tarballs (scripts/pack-core.ts)
 dist-pack/

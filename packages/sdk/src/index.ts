@@ -34,7 +34,10 @@ export interface ClientOptions {
   contracts: HallmarkContracts;
   /** evidence store base URL (a Hallmark gateway serves one) */
   evidenceUrl: string;
-  /** gas limit for createJob and keeper calls (Hedera needs an explicit one) */
+  /**
+   * gas limit for createJob and keeper calls. Default: estimate + 30%. Hedera reserves gasLimit x gasPrice
+   * from the sender up front, so an oversized limit can fail with "insufficient funds" on a small account.
+   */
   gasLimit?: number;
   /** legacy gas price in wei (Hedera: reserve-based fees); default: provider fee data */
   gasPrice?: bigint;
@@ -114,9 +117,16 @@ export class HallmarkClient {
     return chainId === 296n || chainId === 295n ? tinybar * 10_000_000_000n : tinybar;
   }
 
-  private async txOpts(value?: bigint) {
+  /** legacy (type 0) tx options with an explicit gas price; gas limit fixed or estimated + 30% */
+  private async send(method: string, args: unknown[], value?: bigint) {
     const gasPrice = this.o.gasPrice ?? (await this.o.signer.provider!.getFeeData()).gasPrice ?? undefined;
-    return { gasLimit: this.o.gasLimit ?? 3_000_000, type: 0, gasPrice, ...(value !== undefined ? { value } : {}) };
+    const base = { type: 0, gasPrice, ...(value !== undefined ? { value } : {}) };
+    const fn = this.core.getFunction(method);
+    const gasLimit = this.o.gasLimit ?? ((await fn.estimateGas(...args, base)) * 13n) / 10n;
+    const tx = await fn(...args, { ...base, gasLimit });
+    const rc = await tx.wait();
+    if (!rc || rc.status !== 1) throw new Error(`${method} failed: ${tx.hash}`);
+    return tx.hash as string;
   }
 
   /** price (tinybar), per-job bond, and whether the pool can take a job for this model now */
@@ -144,10 +154,8 @@ export class HallmarkClient {
     const reg = (await res.json().catch(() => ({}))) as { locator?: string; accessToken?: string; inputHash?: string; error?: string };
     if (!res.ok) throw new Error(`evidence store refused the input (HTTP ${res.status}): ${reg.error ?? "unknown"}; nothing was paid`);
     if (reg.inputHash?.toLowerCase() !== inputHash.toLowerCase()) throw new Error("evidence store reported a different input hash; nothing was paid");
-    const tx = await this.core.createJob(jobId, buyer, inputHash, saltCommit, modelId, reg.locator ?? this.base, await this.txOpts(await this.wire(q.priceTinybar)));
-    const rc = await tx.wait();
-    if (!rc || rc.status !== 1) throw new Error(`createJob failed: ${tx.hash}`);
-    return { jobId, modelId, inputHash, priceTinybar: q.priceTinybar, accessToken: reg.accessToken!, jobSalt, txHash: tx.hash };
+    const txHash = await this.send("createJob", [jobId, buyer, inputHash, saltCommit, modelId, reg.locator ?? this.base], await this.wire(q.priceTinybar));
+    return { jobId, modelId, inputHash, priceTinybar: q.priceTinybar, accessToken: reg.accessToken!, jobSalt, txHash };
   }
 
   /** The verdict as other contracts read it (IHallmarkVerdict). */
@@ -180,15 +188,15 @@ export class HallmarkClient {
     const now = Math.floor(Date.now() / 1000);
     const late = now > Number(j.deadline) + 2;
     if (st === 2) {
-      await (await this.core.drawAudit(jobId, await this.txOpts())).wait();
+      await this.send("drawAudit", [jobId]);
       return "drawAudit";
     }
     if (st === 5 && late) {
-      await (await this.core.settle(jobId, await this.txOpts())).wait();
+      await this.send("settle", [jobId]);
       return "settle";
     }
     if (late && [1, 3, 4, 6, 7].includes(st)) {
-      await (await this.core.expire(jobId, await this.txOpts())).wait();
+      await this.send("expire", [jobId]);
       return "expire";
     }
     return null;

@@ -253,13 +253,13 @@ abstract contract Ownable is Context {
 // src/ModelRegistry.sol
 
 interface IHallmarkParams {
-    function auditBps() external view returns (uint16);
-    function minBond() external view returns (uint128);
+    function bondParams() external view returns (uint16 auditBps, uint128 minBond);
 }
 
 /// @title ModelRegistry: one entry per pinned model (section 8.1)
-/// @notice Owner-set with bounds. Enabling a model reverts if its bond window is empty for the
-///         current audit rate: deterrence bond > fairness ceiling (edge case 27).
+/// @notice Anyone may PROPOSE a model (from its manifest); only the owner ENABLES one, and enabling reverts
+///         if its bond window is empty for the current audit rate: deterrence bond > fairness ceiling
+///         (edge case 27). Enabling stays with the owner because a fake manifest could claim a low bond.
 contract ModelRegistry is Ownable {
     uint8 public constant EXACT = 0;
     uint8 public constant TOLERANCE = 1;
@@ -268,13 +268,13 @@ contract ModelRegistry is Ownable {
     struct Model {
         uint8 class; // EXACT | TOLERANCE
         uint16 tauBps; // overlap threshold (TOLERANCE only)
-        uint8 normSpec; // 1 = NORM_ASR_V1, 2 = NORM_OCR_V1B
+        uint8 normSpec; // normalization rule id in the TextNorm rule library (1 or 2)
         uint16 minWords;
         uint16 maxWords;
         bool enabled;
         uint16 piBps; // measured catch rate of the worst cheat (G3)
         uint16 fpBps; // measured false-alarm rate (G3)
-        uint16 expectedErrorBps; // informational: pinned model's measured WER (ASR) / CER (OCR), add-on A2
+        uint16 expectedErrorBps; // informational: pinned model's measured error rate (metric named in its manifest), add-on A2
         uint32 errorSampleSize; // informational: number of reference samples behind expectedErrorBps
         bytes32 runtimeDigest; // container image digest
         bytes32 hwClass; // hardware / OS class every operator in the pool must use
@@ -284,16 +284,20 @@ contract ModelRegistry is Ownable {
     }
 
     mapping(bytes32 => Model) private _models;
+    mapping(bytes32 => Model) private _proposals;
     bytes32[] public modelIds;
     IHallmarkParams public hallmark;
 
     event ModelSet(bytes32 indexed modelId, Model model, uint256 bond, uint256 ceiling);
     event HallmarkSet(address hallmark);
+    event ModelProposed(bytes32 indexed modelId, address indexed proposer, bytes32 proposalHash, bytes32 manifestHash, string manifestUri);
 
     error BadModel();
     error WindowEmpty(uint256 bond, uint256 ceiling);
     error HallmarkNotSet();
     error AlreadySet();
+    error NoProposal();
+    error ProposalChanged();
 
     constructor(address owner_) Ownable(owner_) {}
 
@@ -304,22 +308,55 @@ contract ModelRegistry is Ownable {
         emit HallmarkSet(h);
     }
 
-    function setModel(bytes32 id, Model calldata m) external onlyOwner {
-        if (
-            id == bytes32(0) || m.class > TOLERANCE || m.tauBps > 10_000 || (m.normSpec != 1 && m.normSpec != 2)
-                || m.minWords == 0 || m.maxWords > MAX_WORDS || m.minWords > m.maxWords || m.piBps == 0
-                || m.piBps > 10_000 || m.fpBps > 10_000 || m.expectedErrorBps > 10_000 || m.fee == 0 || (m.class == TOLERANCE && m.tauBps == 0)
-        ) revert BadModel();
+    function setModel(bytes32 id, Model memory m) public onlyOwner {
+        _check(id, m);
         uint256 b;
         uint256 ceil;
         if (m.enabled) {
             if (address(hallmark) == address(0)) revert HallmarkNotSet();
-            (b, ceil) = window(m, hallmark.auditBps(), hallmark.minBond());
+            (uint16 auditBps, uint128 minBond) = hallmark.bondParams();
+            (b, ceil) = window(m, auditBps, minBond);
             if (b > ceil) revert WindowEmpty(b, ceil);
         }
         if (_models[id].fee == 0) modelIds.push(id);
         _models[id] = m;
         emit ModelSet(id, m, b, ceil);
+    }
+
+    /// @notice Anyone: propose a model from its manifest. Stored disabled; nothing changes until the owner enables it.
+    ///         `manifestHash` / `manifestUri` point at the full manifest (container digest, normalization, calibration).
+    function proposeModel(bytes32 id, Model calldata m, bytes32 manifestHash, string calldata manifestUri) external {
+        _check(id, m);
+        _proposals[id] = m;
+        _proposals[id].enabled = false;
+        emit ModelProposed(id, msg.sender, proposalHash(id), manifestHash, manifestUri);
+    }
+
+    /// @notice Owner: enable the proposal it reviewed. `expectedHash` pins the exact proposal, so a later
+    ///         re-proposal by someone else cannot be slipped in. Reverts if the bond window is empty.
+    function enableModel(bytes32 id, bytes32 expectedHash) external onlyOwner {
+        Model memory m = _proposals[id];
+        if (m.fee == 0) revert NoProposal();
+        if (proposalHash(id) != expectedHash) revert ProposalChanged();
+        delete _proposals[id];
+        m.enabled = true;
+        setModel(id, m);
+    }
+
+    function proposal(bytes32 id) external view returns (Model memory) {
+        return _proposals[id];
+    }
+
+    function proposalHash(bytes32 id) public view returns (bytes32) {
+        return keccak256(abi.encode(id, _proposals[id]));
+    }
+
+    function _check(bytes32 id, Model memory m) private pure {
+        if (
+            id == bytes32(0) || m.class > TOLERANCE || m.tauBps > 10_000 || (m.normSpec != 1 && m.normSpec != 2)
+                || m.minWords == 0 || m.maxWords > MAX_WORDS || m.minWords > m.maxWords || m.piBps == 0
+                || m.piBps > 10_000 || m.fpBps > 10_000 || m.expectedErrorBps > 10_000 || m.fee == 0 || (m.class == TOLERANCE && m.tauBps == 0)
+        ) revert BadModel();
     }
 
     function get(bytes32 id) external view returns (Model memory) {
@@ -364,7 +401,8 @@ contract Hallmark is Ownable, ReentrancyGuard {
         CommitteeCommit,
         CommitteeReveal,
         Settled,
-        Refunded
+        Refunded,
+        Voided // both drawn executors reported the input missing (add-on: open createJob)
     }
 
     struct Params {
@@ -421,6 +459,9 @@ contract Hallmark is Ownable, ReentrancyGuard {
         uint128 bond;
         uint128 challengeBond;
         uint128 reward;
+        address missingBy; // first executor that reported the input missing
+        uint64 finalizedAt; // when the job became final (0 while open)
+        bool executorSlashed; // refunded because the executor's output was found wrong
     }
 
     struct Seat {
@@ -464,6 +505,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
     uint8 internal constant PAY_FINDER = 4;
     uint8 internal constant PAY_CHALLENGE_REFUND = 5;
     uint8 internal constant PAY_CHALLENGE_FORFEIT = 6;
+    uint8 internal constant PAY_VOID = 7;
 
     bytes32 public constant COMMIT_DOMAIN = keccak256("HALLMARK_COMMIT_V2");
     address internal constant PRNG = address(0x169);
@@ -507,8 +549,10 @@ contract Hallmark is Ownable, ReentrancyGuard {
         bytes32 inputHash,
         uint256 price,
         uint256 bond,
-        address executor
+        address executor,
+        string locator
     );
+    event InputMissing(bytes32 indexed jobId, address indexed reporter, address next);
     event StatusChanged(bytes32 indexed jobId, Status status, uint64 deadline);
     event Committed(bytes32 indexed jobId, address indexed who, uint8 role);
     event AuditDrawn(bytes32 indexed jobId, bool audited, bool prng);
@@ -622,12 +666,8 @@ contract Hallmark is Ownable, ReentrancyGuard {
     }
 
     /// @notice Used by ModelRegistry for the bond-window check.
-    function auditBps() external view returns (uint16) {
-        return params.auditBps;
-    }
-
-    function minBond() external view returns (uint128) {
-        return params.minBond;
+    function bondParams() external view returns (uint16, uint128) {
+        return (params.auditBps, params.minBond);
     }
 
     // ---------------------------------------------------------------- operators
@@ -681,28 +721,38 @@ contract Hallmark is Ownable, ReentrancyGuard {
         returns (uint256 price, uint256 bond, uint256 ceiling, bool available)
     {
         ModelRegistry.Model memory m = registry.get(modelId);
-        Params memory p = params;
-        (bond, ceiling) = registry.window(m, p.auditBps, p.minBond);
-        price = m.fee + p.protocolFee + BondMath.auditFee(p.auditBps, p.arbCostEst);
-        available = m.enabled && bond <= ceiling && eligibleCount(bond) >= 2 + uint256(p.committeeSize);
+        (price, bond, ceiling,) = _price(m, params);
+        available = m.enabled && bond <= ceiling && eligibleCount(bond) >= 2 + uint256(params.committeeSize);
     }
 
-    function createJob(bytes32 jobId, address buyer, bytes32 inputHash, bytes32 saltCommit, bytes32 modelId)
+    function _price(ModelRegistry.Model memory m, Params memory p)
+        private
+        view
+        returns (uint256 price, uint256 bond, uint256 ceiling, uint256 aFee)
+    {
+        (bond, ceiling) = registry.window(m, p.auditBps, p.minBond);
+        aFee = BondMath.auditFee(p.auditBps, p.arbCostEst);
+        price = m.fee + p.protocolFee + aFee;
+    }
+
+    /// @notice Open to any account or contract. The caller pays `price` and is the buyer (refunds go to it);
+    ///         only the configured gateway may name a different buyer (the x402 payer). The input and
+    ///         the job salt must already be in the evidence store named by `locator`.
+    function createJob(bytes32 jobId, address buyer, bytes32 inputHash, bytes32 saltCommit, bytes32 modelId, string calldata locator)
         external
         payable
         nonReentrant
     {
-        if (msg.sender != gateway) revert NotGateway();
+        if (buyer != msg.sender && msg.sender != gateway) revert NotGateway();
+        if (bytes(locator).length > 256) revert BadArgs();
         Job storage j = _jobs[jobId];
         if (jobId == bytes32(0) || j.status != Status.None) revert JobExists();
         if (buyer == address(0) || inputHash == bytes32(0) || saltCommit == bytes32(0)) revert BadArgs();
         ModelRegistry.Model memory m = registry.get(modelId);
         if (!m.enabled) revert ModelDisabled();
         Params memory p = params;
-        (uint256 bond, uint256 ceil) = registry.window(m, p.auditBps, p.minBond);
+        (uint256 price, uint256 bond, uint256 ceil, uint256 aFee) = _price(m, p);
         if (bond > ceil) revert WindowEmpty(bond, ceil);
-        uint256 aFee = BondMath.auditFee(p.auditBps, p.arbCostEst);
-        uint256 price = m.fee + p.protocolFee + aFee;
         if (msg.value != price) revert WrongValue(price);
         if (eligibleCount(bond) < 2 + uint256(p.committeeSize)) revert NoCapacity();
 
@@ -718,7 +768,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
         address e = _draw(jobId, bond, _exclusions(jobId, j));
         j.executor = e;
         _lockSeat(jobId, e, bond, ROLE_EXECUTOR);
-        emit JobCreated(jobId, buyer, modelId, inputHash, price, bond, e);
+        emit JobCreated(jobId, buyer, modelId, inputHash, price, bond, e, locator);
         _setStatus(jobId, j, Status.Assigned, j.commitWindow);
     }
 
@@ -753,6 +803,8 @@ contract Hallmark is Ownable, ReentrancyGuard {
         if (block.timestamp > j.deadline) revert WindowClosed();
         Status st = j.status;
         if (st == Status.Assigned && msg.sender == j.executor) {
+            // the input was available after all: the first executor's "missing" claim was a no-show
+            _penalizeSeat(id, j, j.missingBy, R_NO_COMMIT);
             s.commitment = c;
             emit Committed(id, msg.sender, s.role);
             _setStatus(id, j, Status.Committed, j.drawWindow);
@@ -767,6 +819,29 @@ contract Hallmark is Ownable, ReentrancyGuard {
         } else {
             revert NotYourTurn();
         }
+    }
+
+    /// @notice The drawn executor could not get the input (or its salt) from the evidence store. Once per job:
+    ///         the first report re-draws a different executor; if that one also reports it, the job is
+    ///         voided (buyer refunded minus the void fee, the fee split between the two, nobody penalized).
+    ///         If the second executor commits instead, the first report is penalized as a no-show.
+    function reportInputMissing(bytes32 id) external nonReentrant {
+        Job storage j = _jobs[id];
+        if (j.status != Status.Assigned || msg.sender != j.executor) revert NotYourTurn();
+        if (block.timestamp > j.deadline) revert WindowClosed();
+        address first = j.missingBy;
+        if (first != address(0)) {
+            emit InputMissing(id, msg.sender, address(0));
+            _void(id, j, first);
+            return;
+        }
+        j.missingBy = msg.sender;
+        address e = _draw(id, j.bond, _exclusions(id, j));
+        if (e == address(0)) revert NoCapacity();
+        j.executor = e;
+        _lockSeat(id, e, j.bond, ROLE_EXECUTOR);
+        emit InputMissing(id, msg.sender, e);
+        _setStatus(id, j, Status.Assigned, j.commitWindow);
     }
 
     /// @notice Roll the audit AFTER the executor has committed. EOA-only, so a wrapper contract
@@ -1005,6 +1080,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
             _close(id, j, Status.Settled);
         } else if (vOk && !eOk) {
             emit Resolved(id, OUT_EXECUTOR_WRONG, t.cE, t.cV, t.r);
+            j.executorSlashed = true;
             uint256 amt = _slashSeat(id, j, j.executor, R_WRONG);
             uint256 finder = amt * j.slashToFinderBps / 10_000;
             _credit(id, j.challenged ? j.challenger : j.verifier, finder, PAY_FINDER);
@@ -1161,9 +1237,22 @@ contract Hallmark is Ownable, ReentrancyGuard {
 
     /// @dev refund the full price; push with a bounded stipend, fall back to credits (edge case 17)
     function _refund(bytes32 id, Job storage j) private {
-        uint256 amt = uint256(j.fee) + j.protocolFee + j.auditFee;
-        escrow -= amt;
-        _close(id, j, Status.Refunded);
+        _payBack(id, j, 0, Status.Refunded);
+    }
+
+    /// @dev void fee = the job's protocol fee: kept from the refund and split between the two executors
+    function _void(bytes32 id, Job storage j, address first) private {
+        uint256 vf = j.protocolFee;
+        _credit(id, first, vf / 2, PAY_VOID);
+        _credit(id, j.executor, vf - vf / 2, PAY_VOID);
+        _payBack(id, j, vf, Status.Voided);
+    }
+
+    function _payBack(bytes32 id, Job storage j, uint256 kept, Status st) private {
+        uint256 total = uint256(j.fee) + j.protocolFee + j.auditFee;
+        escrow -= total;
+        uint256 amt = total - kept;
+        _close(id, j, st);
         (bool ok,) = j.buyer.call{value: amt, gas: PUSH_GAS}("");
         if (!ok) {
             credits[j.buyer] += amt;
@@ -1175,12 +1264,14 @@ contract Hallmark is Ownable, ReentrancyGuard {
     /// @dev final state: release every bond still held, record the outcome
     function _close(bytes32 id, Job storage j, Status st) private {
         _releaseSeat(id, j, j.executor);
+        _releaseSeat(id, j, j.missingBy);
         if (j.verifier != address(0)) _releaseSeat(id, j, j.verifier);
         address[] storage c = _committee[id];
         for (uint256 i; i < c.length; ++i) {
             _releaseSeat(id, j, c[i]);
         }
         j.status = st;
+        j.finalizedAt = uint64(block.timestamp);
         emit StatusChanged(id, st, 0);
         if (st == Status.Settled) emit JobSettled(id, j.audited && !j.auditSkipped, j.auditSkipped);
     }
@@ -1249,12 +1340,13 @@ contract Hallmark is Ownable, ReentrancyGuard {
 
     function _exclusions(bytes32 id, Job storage j) private view returns (address[] memory ex) {
         address[] storage c = _committee[id];
-        ex = new address[](3 + c.length);
+        ex = new address[](4 + c.length);
         ex[0] = j.executor;
         ex[1] = j.verifier;
         ex[2] = j.challenger;
+        ex[3] = j.missingBy;
         for (uint256 i; i < c.length; ++i) {
-            ex[3 + i] = c[i];
+            ex[4 + i] = c[i];
         }
     }
 
@@ -1352,3 +1444,4 @@ contract Hallmark is Ownable, ReentrancyGuard {
         return totalFree + totalLocked + escrow + creditsTotal + auditPool + slashPool + treasury + challengeEscrow;
     }
 }
+
