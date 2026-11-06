@@ -17,7 +17,8 @@
     "web": "pnpm --filter @hallmark/web dev",
     "calibrate": "tsx scripts/calibrate.ts",
     "operator": "tsx --env-file=env/common.env --env-file=${ENV_FILE:-env/operator.env} packages/operator/src/main.ts",
-    "setup:contracts": "sh contracts/install-deps.sh"
+    "setup:contracts": "sh contracts/install-deps.sh",
+    "tunnel": "sh -c 'D=$(grep -s ^NGROK_DOMAIN= env/tunnel.env | cut -d= -f2); [ -n \"$D\" ] || { echo \"put NGROK_DOMAIN=<name>.ngrok-free.app in env/tunnel.env\"; exit 1; }; ngrok http --url=\"$D\" 8787'"
   },
   "devDependencies": {
     "@types/node": "22.10.2",
