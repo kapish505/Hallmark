@@ -33,7 +33,16 @@ export const GatewayEnv = ChainEnv.extend({
    * salt, input and outputs, e.g. the challenger bot. Listed in the manifest.
    */
   EVIDENCE_WATCHERS: z.string().default(""),
+  // ---- canary jobs (measurement only, never slash): off unless clips, a rate and a canary account are set
+  CANARY_DIR: z.string().default("./data/canaries"),
+  CANARY_PER_DAY: z.coerce.number().min(0).default(0),
+  CANARY_MAX_SPEND_PER_DAY_TINYBAR: z.string().regex(/^\d+$/).default("500000000"),
+  CANARY_MAX_ERROR: z.coerce.number().min(0).max(1).default(0.15),
+  CANARY_ACCOUNT_ID: zEnv.accountId.optional(),
+  CANARY_PRIVATE_KEY: zEnv.hex32.optional(),
   DEMO_MODE: zEnv.bool,
+  /** demo only (testnet): the contract owner key, so the attack lab can change the audit rate and file a challenge */
+  DEMO_OWNER_PRIVATE_KEY: zEnv.hex32.optional(),
   /** "0xOperatorAddr=http://host:port,..." control endpoints of demo operators */
   OPERATOR_CONTROL_URLS: z.string().default(""),
   DEMO_CONTROL_TOKEN: z.string().optional(),

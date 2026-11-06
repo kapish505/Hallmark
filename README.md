@@ -43,6 +43,17 @@ All three are verified on Sourcify.
    buyer refunded in full. Every stalled stage has an `expire` path that refunds the buyer and penalizes only the
    missing party.
 
+### Committee, canaries and demo scenarios
+
+- **Committee of 3** (the contract default): the smallest committee with a real majority, so one faulty member cannot
+  decide a dispute. A job therefore needs 5 eligible operators: executor, verifier and three members.
+- **Canary jobs:** the gateway pays for a few jobs a day from a separate canary account, through the same public x402
+  path, using inputs with known answers (`data/canaries/<id>.wav|png` plus `<id>.ref.txt`). Results are published only
+  as aggregates (`GET /v1/canaries`). Canaries measure pool accuracy and never slash anyone.
+- **Demo scenarios:** with `DEMO_MODE`, the console's attack lab applies one-click presets to the demo operators:
+  honest, audited, garbage, smaller model, truncation, replay, silent executor, hidden answer, verifier no-show,
+  committee no-show, collusion with a challenge, and a wrongful challenge.
+
 ### Bond sizing
 
 ```
@@ -114,8 +125,9 @@ pnpm web                             # http://localhost:5173
 1. Copy `env/*.env.example` to `env/*.env` and fill in the contract addresses and testnet keys, or generate the
    service accounts with:
    ```bash
-   npx tsx scripts/setup-accounts.ts --internal --fund
+   npx tsx scripts/setup-accounts.ts --internal --fund --demo
    ```
+   This creates the gateway, 5 operators, a challenger and a canary buyer, and funds them from the deployer.
 2. Register models with measured values (`scripts/calibrate.ts`, then `ModelRegistry.setModel`).
 3. Start the services:
    ```bash

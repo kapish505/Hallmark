@@ -34,6 +34,8 @@ import {
 import type { BlobStore } from "./blobs.js";
 import type { Db, JobRow } from "./db.js";
 import type { Indexer } from "./indexer.js";
+import type { CanaryRunner } from "./canary.js";
+import { SCENARIOS, type DemoController } from "./demo.js";
 
 const log = logger("gateway");
 
@@ -65,6 +67,8 @@ export interface AppDeps {
   paymentMiddleware: (req: Request, res: Response, next: NextFunction) => unknown;
   /** the live task list (prices refresh from the contract) */
   tasks: () => TaskConfig[];
+  canary?: CanaryRunner;
+  demo?: DemoController;
   cfg: {
     publicUrl: string;
     payTo: string;
@@ -464,6 +468,39 @@ export function createApp(d: AppDeps) {
     res.status(out.every((s) => s === 200) ? 200 : 502).json({ updated: urls.length, statuses: out });
   });
   app.get("/demo/operators", (_req, res) => res.json(Object.keys(cfg.operatorControl)));
+  app.get("/demo/scenarios", (_req, res) => res.json({ scenarios: SCENARIOS, canSetAudit: !!d.demo?.canSetAudit, demoMode: cfg.demoMode }));
+  app.post("/demo/scenario", express.json(), demoAuth, async (req, res) => {
+    try {
+      res.json(await d.demo!.apply(String(req.body?.id ?? "")));
+    } catch (e) {
+      res.status(400).json({ error: String(e instanceof Error ? e.message : e) });
+    }
+  });
+  app.post("/demo/audit", express.json(), demoAuth, async (req, res) => {
+    const bps = Number(req.body?.bps);
+    if (!Number.isInteger(bps) || bps < 1 || bps > 10_000) return void res.status(400).json({ error: "bps must be 1-10000" });
+    try {
+      await d.demo!.setAudit(bps);
+      res.json({ auditBps: bps });
+    } catch (e) {
+      res.status(400).json({ error: String(e instanceof Error ? e.message : e) });
+    }
+  });
+  app.post("/demo/challenge", express.json(), demoAuth, async (req, res) => {
+    try {
+      res.json({ tx: await d.demo!.challenge(String(req.body?.jobId ?? "")) });
+    } catch (e) {
+      res.status(400).json({ error: String(e instanceof Error ? e.message : e) });
+    }
+  });
+  app.post("/demo/canary", demoAuth, async (_req, res) => {
+    if (!d.canary) return void res.status(501).json({ error: "canaries not configured" });
+    void d.canary.runOnce().catch(() => undefined);
+    res.status(202).json({ started: true });
+  });
+
+  // ---------------------------------------------------------------- canaries (aggregate only)
+  app.get("/v1/canaries", (_req, res) => res.json(d.canary ? d.canary.stats() : { enabled: false }));
 
 
   return app;

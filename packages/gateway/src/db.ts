@@ -66,6 +66,19 @@ export interface OutputRow {
   source: string;
 }
 
+export interface CanaryRow {
+  job_id: string;
+  clip: string;
+  task: string;
+  status: string;
+  badge: string;
+  error: number;
+  matched: number | null;
+  pass: number;
+  cost: string;
+  at: number;
+}
+
 export class Db {
   readonly sql: Database.Database;
   constructor(path: string) {
@@ -105,6 +118,10 @@ export class Db {
       );
       CREATE INDEX IF NOT EXISTS outputs_commit ON outputs (out_commit);
       CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS canaries (
+        job_id TEXT PRIMARY KEY, clip TEXT NOT NULL, task TEXT NOT NULL, status TEXT NOT NULL, badge TEXT NOT NULL,
+        error REAL NOT NULL, matched INTEGER, pass INTEGER NOT NULL, cost TEXT NOT NULL, at INTEGER NOT NULL
+      );
     `);
   }
 
@@ -195,5 +212,19 @@ export class Db {
 
   output(jobId: string, operator: string): OutputRow | null {
     return (this.sql.prepare("SELECT * FROM outputs WHERE job_id = ? AND operator = ?").get(jobId.toLowerCase(), operator.toLowerCase()) as OutputRow | undefined) ?? null;
+  }
+
+  putCanary(r: CanaryRow) {
+    this.sql
+      .prepare("INSERT OR REPLACE INTO canaries (job_id, clip, task, status, badge, error, matched, pass, cost, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(r.job_id, r.clip, r.task, r.status, r.badge, r.error, r.matched, r.pass, r.cost, r.at);
+  }
+
+  canaries(): CanaryRow[] {
+    return this.sql.prepare("SELECT * FROM canaries ORDER BY at DESC").all() as CanaryRow[];
+  }
+
+  canarySpendSince(t: number): bigint {
+    return (this.sql.prepare("SELECT cost FROM canaries WHERE at >= ?").all(t) as Array<{ cost: string }>).reduce((s, r) => s + BigInt(r.cost), 0n);
   }
 }

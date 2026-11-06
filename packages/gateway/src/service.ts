@@ -15,7 +15,10 @@ import {
   type NormSpec,
   type Task,
 } from "@hallmark/shared";
+import { HallmarkAgent } from "@hallmark/buyer-agent";
 import { createApp, type TaskConfig } from "./app.js";
+import { CanaryRunner, loadCanaries, type CanaryBuyer } from "./canary.js";
+import { DemoController } from "./demo.js";
 import { BlobStore } from "./blobs.js";
 import { Db } from "./db.js";
 import type { GatewayEnv } from "./env.js";
@@ -113,6 +116,47 @@ export async function buildGateway(
     if (addr && url) operatorControl[addr.toLowerCase()] = url.replace(/\/$/, "");
   }
 
+  // canary jobs: a separate buyer account paying through the same public x402 path
+  let canaryBuyer: CanaryBuyer | null = null;
+  const canary = new CanaryRunner({
+    db,
+    set: env.CANARY_ACCOUNT_ID && env.CANARY_PRIVATE_KEY ? loadCanaries(env.CANARY_DIR) : [],
+    price: (t) => tasks.find((x) => x.task === t && x.available)?.priceTinybar ?? null,
+    cfg: { perDay: env.CANARY_PER_DAY, maxSpendPerDayTinybar: BigInt(env.CANARY_MAX_SPEND_PER_DAY_TINYBAR), noRepeat: 10, maxError: env.CANARY_MAX_ERROR },
+    buyer: async () => {
+      if (canaryBuyer) return canaryBuyer;
+      const max = tasks.reduce((m, t) => (t.priceTinybar > m ? t.priceTinybar : m), 0n) * 2n;
+      const agent = await HallmarkAgent.hedera({
+        gatewayUrl: env.PUBLIC_URL,
+        accountId: env.CANARY_ACCOUNT_ID!,
+        privateKey: env.CANARY_PRIVATE_KEY!,
+        rpcUrl: env.RPC_URL,
+        policy: { maxPricePerCallTinybar: max, sessionBudgetTinybar: max * 10_000n },
+      });
+      canaryBuyer = {
+        run: async (task, input) => {
+          const r = await agent.run(task, input, { mode: "require-final", timeoutMs: 20 * 60_000 });
+          return { jobId: r.jobId, text: r.text, status: r.status, badge: r.badge };
+        },
+      };
+      return canaryBuyer;
+    },
+  });
+
+  const demo = new DemoController({
+    contracts,
+    owner: env.DEMO_MODE && env.DEMO_OWNER_PRIVATE_KEY ? new TxSender(new Wallet(env.DEMO_OWNER_PRIVATE_KEY, provider), { defaultGasLimit: env.GAS_LIMIT_DEFAULT }) : null,
+    units,
+    operatorControl,
+    token: env.DEMO_CONTROL_TOKEN ?? "",
+    refreshPrices: () => refreshPrices(),
+  });
+  indexer.bus.on("event", (e: { name: string; jobId: string | null; args: Record<string, unknown> }) => {
+    if (e.name === "StatusChanged" && Number(e.args.status) === 5 && e.jobId && db.job(e.jobId)) {
+      void demo.maybeChallenge(e.jobId).catch((err) => log.warn("demo challenge failed", { error: String(err) }));
+    }
+  });
+
   const app = createApp({
     db,
     contracts,
@@ -120,6 +164,8 @@ export async function buildGateway(
     blobs,
     paymentMiddleware,
     tasks: () => tasks,
+    canary,
+    demo,
     cfg: {
       publicUrl: env.PUBLIC_URL,
       payTo,
@@ -161,10 +207,13 @@ export async function buildGateway(
     pipeline,
     contracts,
     tasks,
+    canary,
+    demo,
     refreshPrices,
     start() {
       indexer.start();
       if (env.KEEPER) keeper.start();
+      canary.start();
       timers.push(setInterval(() => void refreshPrices().catch((e) => log.warn("price refresh failed", { error: String(e) })), env.PRICE_REFRESH_MS));
       timers.push(setInterval(() => void pipeline.retryStuck().catch((e) => log.warn("retry failed", { error: String(e) })), 15_000));
       return app.listen(env.PORT, () => log.info(`listening on :${env.PORT}`, { payTo, facilitator: o.facilitatorUrl }));
@@ -172,6 +221,7 @@ export async function buildGateway(
     stop() {
       indexer.stop();
       keeper.stop();
+      canary.stop();
       for (const t of timers) clearInterval(t);
     },
   };

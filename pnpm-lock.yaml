@@ -60,6 +60,9 @@ importers:
 
   packages/gateway:
     dependencies:
+      '@hallmark/buyer-agent':
+        specifier: workspace:*
+        version: link:../buyer-agent
       '@hallmark/shared':
         specifier: workspace:*
         version: link:../shared

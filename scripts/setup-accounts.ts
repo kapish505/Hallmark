@@ -1,8 +1,12 @@
 /**
  * Create the service accounts for the demo pool (testnet only) and write their env files.
  *
- *   tsx scripts/setup-accounts.ts [--operators 5] [--fund] [--gateway-hbar 5] [--operator-hbar 4] [--challenger-hbar 3]
- *     [--internal]   write in-cluster URLs (http://gateway:8787, http://asr-worker:9000) for docker-compose.prod.yml
+ *   tsx scripts/setup-accounts.ts [--operators 5] [--fund] [--gateway-hbar 5] [--operator-hbar 6] [--challenger-hbar 3]
+ *     [--canary-hbar 4] [--internal] [--demo] [--demo-owner]
+ *   --internal    write in-cluster URLs (http://gateway:8787, http://asr-worker:9000) for docker-compose.prod.yml
+ *   --demo        turn on the attack lab: DEMO_MODE and one shared DEMO_CONTROL_TOKEN for gateway and operators
+ *   --demo-owner  also copy the owner key (PRIVATE_KEY in .env) into the gateway as DEMO_OWNER_PRIVATE_KEY, so the
+ *                 attack lab can change the audit rate. Testnet demo machines only.
  *
  * - Generates an ECDSA key per service ONLY if its env file does not exist yet (never overwrites a key).
  * - Keys go only into git-ignored env/*.env files; this script never prints a key.
@@ -12,6 +16,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { randomBytes } from "node:crypto";
 import { JsonRpcProvider, Wallet, parseEther } from "ethers";
 import { DEFAULTS, fetchJson, sleep } from "../packages/shared/src/index.js";
 
@@ -21,7 +26,10 @@ const { values } = parseArgs({
     fund: { type: "boolean", default: false },
     internal: { type: "boolean", default: false },
     "gateway-hbar": { type: "string", default: "5" },
-    "operator-hbar": { type: "string", default: "4" },
+    "operator-hbar": { type: "string", default: "6" },
+    "canary-hbar": { type: "string", default: "4" },
+    demo: { type: "boolean", default: false },
+    "demo-owner": { type: "boolean", default: false },
     "challenger-hbar": { type: "string", default: "3" },
     "public-gateway-url": { type: "string", default: "http://localhost:8787" },
   },
@@ -74,13 +82,21 @@ OPERATOR_CONTROL_URLS=
 GATEWAY_URL=${gwInternal}
 ASR_WORKER_URL=${asr}
 OCR_WORKER_URL=${ocr}
-STAKE_TINYBAR=200000000
+STAKE_TINYBAR=450000000
 STATE_DIR=./data/operator-${i}
 BEHAVIOR=honest
 CONTROL_PORT=${9100 + i}
 DEMO_CONTROL_TOKEN=
 `,
   })),
+  {
+    name: "canary",
+    keyVar: "CANARY_PRIVATE_KEY",
+    hbar: values["canary-hbar"]!,
+    body: (k) => `# canary buyer (measurement only). Its key and account id are copied into env/gateway.env.
+CANARY_PRIVATE_KEY=${k}
+`,
+  },
   {
     name: "challenger",
     keyVar: "CHALLENGER_PRIVATE_KEY",
@@ -112,6 +128,23 @@ const operatorAddrs = operatorsList.map((i) => addrs[`operator-${i}`]);
 let gw = readFileSync(env("gateway"), "utf8");
 gw = gw.replace(/^EVIDENCE_WATCHERS=.*$/m, `EVIDENCE_WATCHERS=${addrs.challenger}`);
 gw = gw.replace(/^OPERATOR_CONTROL_URLS=.*$/m, `OPERATOR_CONTROL_URLS=${operatorsList.map((i) => `${addrs[`operator-${i}`]}=http://${internal ? `operator-${i}` : "localhost"}:${9100 + i}`).join(",")}`);
+// canary buyer and demo controls
+const set = (text: string, k: string, v: string) => (new RegExp(`^${k}=.*$`, "m").test(text) ? text.replace(new RegExp(`^${k}=.*$`, "m"), `${k}=${v}`) : `${text.trimEnd()}\n${k}=${v}\n`);
+gw = set(gw, "CANARY_PRIVATE_KEY", readKey(env("canary"), "CANARY_PRIVATE_KEY")!);
+gw = set(gw, "CANARY_DIR", "./data/canaries");
+gw = set(gw, "CANARY_PER_DAY", "6");
+if (values.demo) {
+  const token = /^DEMO_CONTROL_TOKEN=(\S+)$/m.exec(gw)?.[1] ?? randomBytes(24).toString("hex");
+  gw = set(gw, "DEMO_MODE", "true");
+  gw = set(gw, "DEMO_CONTROL_TOKEN", token);
+  for (const i of operatorsList) writeFileSync(env(`operator-${i}`), set(readFileSync(env(`operator-${i}`), "utf8"), "DEMO_CONTROL_TOKEN", token), { mode: 0o600 });
+  if (values["demo-owner"]) {
+    const owner = readKey(join(ROOT, ".env"), "PRIVATE_KEY");
+    if (!owner) throw new Error("--demo-owner needs PRIVATE_KEY in .env");
+    gw = set(gw, "DEMO_OWNER_PRIVATE_KEY", owner);
+  }
+  console.log("demo mode on: the attack-lab token is in env/gateway.env (DEMO_CONTROL_TOKEN)");
+}
 writeFileSync(env("gateway"), gw, { mode: 0o600 });
 
 const rpc = process.env.RPC_URL ?? DEFAULTS.rpcUrl;
@@ -150,9 +183,9 @@ for (const s of services) {
     }
   }
   console.log(`${s.name.padEnd(12)} ${addrs[s.name]}  ${id ?? "(no account yet: fund this address)"}`);
-  if (s.name === "gateway" && id) {
-    const g = readFileSync(env("gateway"), "utf8").replace(/^GATEWAY_ACCOUNT_ID=.*$/m, `GATEWAY_ACCOUNT_ID=${id}`);
-    writeFileSync(env("gateway"), g, { mode: 0o600 });
+  if ((s.name === "gateway" || s.name === "canary") && id) {
+    const k = s.name === "gateway" ? "GATEWAY_ACCOUNT_ID" : "CANARY_ACCOUNT_ID";
+    writeFileSync(env("gateway"), set(readFileSync(env("gateway"), "utf8"), k, id), { mode: 0o600 });
   }
 }
 console.log(`\nnext: Hallmark.setGateway(${addrs.gateway}) from the owner, then start the stack.`);
