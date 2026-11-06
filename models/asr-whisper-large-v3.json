@@ -31,7 +31,7 @@
     "maxSeconds": 15,
     "hint": "WAV, 16 kHz mono 16-bit, up to 15 s"
   },
-  "worker": { "urlEnv": "ASR_WORKER_URL", "path": "/asr" },
+  "worker": { "urlEnv": "ASR_WORKER_URL", "path": "/asr", "port": 9000 },
   "validators": ["none", "min_words:<n>", "date_iso"],
   "cheats": {
     "lazy-small-model": { "worker": { "model_name": "tiny" } },

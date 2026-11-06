@@ -1,0 +1,9 @@
+{
+  "name": "@hallmark/contracts",
+  "version": "0.1.0-alpha.0",
+  "description": "Hallmark core contracts: ABIs, Hedera testnet addresses, IHallmarkVerdict, deploy script (alpha).",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./index.d.ts", "default": "./index.js" }, "./abi/*": "./abi/*", "./deployments/*": "./deployments/*" }
+}

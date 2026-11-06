@@ -63,6 +63,8 @@ export const Manifest = z
       urlEnv: z.string().regex(/^[A-Z0-9_]+$/),
       /** POST path on the worker */
       path: z.string().regex(/^\/[a-z0-9/-]*$/),
+      /** port the container listens on */
+      port: z.number().int().min(1).max(65535),
     }),
     /** advisory validators the gateway offers (no money effect) */
     validators: z.array(z.string()).min(1),

@@ -1,4 +1,4 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env node
 /**
  * hallmark-calibrate <manifest.json> <dataset-dir> --workers <url,url> [--runs 20] [--cheat-runs 3]
  *                    --honest-cost-tinybar N [--audit-bps 3000] [--min-bond 10000000] [--out file]

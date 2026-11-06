@@ -1,6 +1,6 @@
 {
   "name": "@hallmark/operator",
-  "version": "0.2.0",
+  "version": "0.2.0-alpha.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -18,5 +18,8 @@
   },
   "devDependencies": {
     "tsx": "4.19.2"
+  },
+  "bin": {
+    "hallmark-operator": "./src/cli.ts"
   }
 }

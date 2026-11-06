@@ -1,4 +1,4 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env node
 /**
  * hallmark-models <check|propose|enable|show> <manifest.json>
  *

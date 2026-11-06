@@ -31,7 +31,7 @@
     "maxPixels": 4000000,
     "hint": "PNG, printed ASCII text"
   },
-  "worker": { "urlEnv": "OCR_WORKER_URL", "path": "/ocr" },
+  "worker": { "urlEnv": "OCR_WORKER_URL", "path": "/ocr", "port": 9001 },
   "validators": ["none", "min_words:<n>", "date_iso", "amount_present", "invoice_total"],
   "cheats": {
     "lazy-small-model": { "worker": { "engine": "fast" } },
