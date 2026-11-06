@@ -11,6 +11,14 @@
     {
       "source": "/console",
       "destination": "/index.html"
+    },
+    {
+      "source": "/docs",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/use-cases",
+      "destination": "/index.html"
     }
   ],
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile --filter \"@hallmark/web...\""
