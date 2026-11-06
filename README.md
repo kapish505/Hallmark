@@ -15,6 +15,10 @@ Live models today: speech-to-text (Whisper large-v3) and OCR (Tesseract 5).
 
 All three are verified on Sourcify.
 
+**First settled x402 payment on Hedera:** [`0.0.7162784@1793957837.218925989`](https://hashscan.io/testnet/transaction/0.0.7162784%401793957837.218925989)
+(OCR job [`0xe741…b61b`](https://hashscan.io/testnet/transaction/0x67c112c5928da74ff4705fb45f67190c82e294609bd68c175ae39ebe952b717d):
+created, committed, audit drawn, revealed, and [settled](https://hashscan.io/testnet/transaction/0x7849c3e2b3f210711e555d64af078fd64652d6e941362a22ecba66a344b96f2b)).
+
 ---
 
 ## Architecture

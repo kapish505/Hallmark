@@ -181,6 +181,19 @@ if (values.fund) {
   }
 }
 
+// An account created by sending HBAR to its EVM address is "hollow" (no key on file) until it signs a
+// transaction itself. x402 facilitators and HAPI refunds need the key, so send one 0-value self-transfer.
+if (values.fund) {
+  for (const s of services) {
+    const key = readKey(env(s.name), s.keyVar)!;
+    const info = await fetchJson<{ key: unknown }>(`${process.env.MIRROR_NODE_URL ?? DEFAULTS.mirrorNodeUrl}/accounts/${addrs[s.name]}`).catch(() => null);
+    if (info && info.key) continue;
+    const w = new Wallet(key, provider);
+    await (await w.sendTransaction({ to: w.address, value: 0n, gasLimit: 30_000 })).wait();
+    console.log(`completed ${s.name} (key now on file)`);
+  }
+}
+
 // account ids (exist only after the first transfer to the address)
 const mirror = process.env.MIRROR_NODE_URL ?? DEFAULTS.mirrorNodeUrl;
 for (const s of services) {

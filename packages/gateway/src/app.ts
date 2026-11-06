@@ -495,7 +495,7 @@ export function createApp(d: AppDeps) {
   });
   app.post("/demo/canary", demoAuth, async (_req, res) => {
     if (!d.canary) return void res.status(501).json({ error: "canaries not configured" });
-    void d.canary.runOnce().catch(() => undefined);
+    void d.canary.runOnce().then((r) => !r.ok && log.warn("canary not run", { reason: r.reason })).catch((e) => log.warn("canary failed", { error: String(e) }));
     res.status(202).json({ started: true });
   });
 
