@@ -1,0 +1,342 @@
+# Baseline before the core-first refactor
+# commit fb778f7, run 2026-11-07 on the laptop (anvil + forge + vitest + local full-stack e2e)
+
+## forge test (contracts/)
+Ran 6 test suites: 47 tests passed, 0 failed, 0 skipped (47 total tests)
+InvariantTest: invariant_conservation, invariant_escrowMatchesOpenJobs, invariant_lockedMatchesOperators, invariant_terminalIsFinal (64 runs x 300 calls, 0 reverts)
+
+## vitest (packages/*/test)
+Test Files  6 passed (6)
+Tests  53 passed (53)
+
+## local full-stack e2e (scripts/local/e2e-local.ts): full output
+deployed {
+  HALLMARK_ADDRESS: '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0',
+  JUDGE_ADDRESS: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
+  REGISTRY_ADDRESS: '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+}
+2026-11-06T22:28:18.857Z INFO  [op0] registered operator {"stake":"1000000000000000","tx":"0xfc6ee760b9f73597518dc236b7b3ee57bd90ec15e7637f99846001d15c531b07"}
+2026-11-06T22:28:19.960Z INFO  [op1] registered operator {"stake":"1000000000000000","tx":"0xd0bdf4f1a0dfa304424c30a87e2e0131e477c9462995ea2bdfcc0bd144c8a5d8"}
+2026-11-06T22:28:21.056Z INFO  [op2] registered operator {"stake":"1000000000000000","tx":"0x9a8dd09ca38a43cb6b98b97f5a8cc3b31cd94d3cad7d52cbb98f17a1288523d6"}
+2026-11-06T22:28:22.146Z INFO  [op3] registered operator {"stake":"1000000000000000","tx":"0xa2b8da8da8adb6e82458b1c35c81ff1f82b97bff7b1d19ae762076083951c461"}
+2026-11-06T22:28:23.239Z INFO  [op4] registered operator {"stake":"1000000000000000","tx":"0x7b18dd740456007bf481264be5b230ff665acfb4bf442b1bf89ff0a98d242daf"}
+2026-11-06T22:28:24.329Z INFO  [op5] registered operator {"stake":"1000000000000000","tx":"0x2cc17672c657bbcb13dc0c36ede08593e0e7f39912e7a8d04ab1486795e24123"}
+2026-11-06T22:28:24.403Z INFO  [gateway] tasks {"asr":{"price":"0.21001 HBAR","bond":"2999.8 HBAR","available":true},"ocr":{"price":"0.11001 HBAR","bond":"1499.9 HBAR","available":true}}
+2026-11-06T22:28:24.539Z INFO  [agent] buying {"task":"asr","price":"21001000","class":"EXACT","auditBps":1,"spentSoFar":"0"}
+2026-11-06T22:28:24.580Z INFO  [agent] paid {"jobId":"0x7db1ad277a8317ea89967711d902733b777378a400ba4a79b57dcd18cfd3082c","tx":"local-fake-1","link":"https://hashscan.io/testnet/transaction/local-fake-1"}
+2026-11-06T22:28:25.645Z INFO  [op0] output ready {"jobId":"0x7db1ad277a8317ea89967711d902733b777378a400ba4a79b57dcd18cfd3082c","role":1,"task":"asr","behavior":"honest","words":10}
+2026-11-06T22:28:25.666Z INFO  [pipeline] job created {"jobId":"0x7db1ad277a8317ea89967711d902733b777378a400ba4a79b57dcd18cfd3082c","task":"asr","tx":"0xe10c6a03a629101e721c68f786aa9a0c46c8a6bf9afab7e476141f2617b277c3"}
+2026-11-06T22:28:26.738Z INFO  [op0] committed {"jobId":"0x7db1ad277a8317ea89967711d902733b777378a400ba4a79b57dcd18cfd3082c","role":1,"behavior":"honest"}
+2026-11-06T22:28:28.064Z INFO  [keeper] drawAudit {"jobId":"0x7db1ad277a8317ea89967711d902733b777378a400ba4a79b57dcd18cfd3082c","tx":"0xb3434a0f516edcf10c8e4f94a7704a92ac9e1646aa4cd0a847b324fd142ec488"}
+2026-11-06T22:28:28.859Z INFO  [op0] revealed {"jobId":"0x7db1ad277a8317ea89967711d902733b777378a400ba4a79b57dcd18cfd3082c","role":1}
+2026-11-06T22:28:50.676Z INFO  [keeper] settle {"jobId":"0x7db1ad277a8317ea89967711d902733b777378a400ba4a79b57dcd18cfd3082c","tx":"0x984f3c64d36e4b01d932e1e0f8219469ac3ea0b12bc293e9791e7bf3714c1ff0"}
+PASS e2e:honest (28.4 s) - "the quick brown fox jumps over the lazy dog 55867" settled unaudited; commitment checked by the buyer; payment local-fake-1
+2026-11-06T22:28:52.948Z INFO  [agent] buying {"task":"asr","price":"21001000","class":"EXACT","auditBps":1,"spentSoFar":"21001000"}
+2026-11-06T22:28:52.977Z INFO  [agent] paid {"jobId":"0x12b7470375c38c4c0be0d58074527f1fa80681c2787e48e70d5611f0cf8f7e37","tx":"local-fake-2","link":"https://hashscan.io/testnet/transaction/local-fake-2"}
+2026-11-06T22:28:53.802Z INFO  [op4] output ready {"jobId":"0x12b7470375c38c4c0be0d58074527f1fa80681c2787e48e70d5611f0cf8f7e37","role":1,"task":"asr","behavior":"honest","words":12}
+2026-11-06T22:28:54.054Z INFO  [pipeline] job created {"jobId":"0x12b7470375c38c4c0be0d58074527f1fa80681c2787e48e70d5611f0cf8f7e37","task":"asr","tx":"0x55eb3264caa51b0a26daa3143db8dba1131e275606008d989745476393925b54"}
+2026-11-06T22:28:54.891Z INFO  [op4] committed {"jobId":"0x12b7470375c38c4c0be0d58074527f1fa80681c2787e48e70d5611f0cf8f7e37","role":1,"behavior":"honest"}
+2026-11-06T22:28:55.927Z INFO  [keeper] drawAudit {"jobId":"0x12b7470375c38c4c0be0d58074527f1fa80681c2787e48e70d5611f0cf8f7e37","tx":"0x50882ff660e2c9d1ea47887547309cd6b3fe34584fb13adf024632cd6a223e95"}
+2026-11-06T22:28:57.012Z INFO  [op4] revealed {"jobId":"0x12b7470375c38c4c0be0d58074527f1fa80681c2787e48e70d5611f0cf8f7e37","role":1}
+2026-11-06T22:29:18.688Z INFO  [keeper] settle {"jobId":"0x12b7470375c38c4c0be0d58074527f1fa80681c2787e48e70d5611f0cf8f7e37","tx":"0x8f190d61a1ae2a92110e3d00b501517545ebaf179241e0ce1da54c28fe65c648"}
+PASS e2e:validator-pass (26.4 s) - min_words:3 -> pass (advisory)
+2026-11-06T22:29:19.336Z INFO  [agent] buying {"task":"asr","price":"21001000","class":"EXACT","auditBps":1,"spentSoFar":"42002000"}
+2026-11-06T22:29:19.361Z INFO  [agent] paid {"jobId":"0x23f71d1407bb3eadf6bbf95ec39651a1de759158e952bcbe810a40f816a286a0","tx":"local-fake-3","link":"https://hashscan.io/testnet/transaction/local-fake-3"}
+2026-11-06T22:29:19.897Z INFO  [op0] output ready {"jobId":"0x23f71d1407bb3eadf6bbf95ec39651a1de759158e952bcbe810a40f816a286a0","role":1,"task":"asr","behavior":"honest","words":12}
+2026-11-06T22:29:20.438Z INFO  [pipeline] job created {"jobId":"0x23f71d1407bb3eadf6bbf95ec39651a1de759158e952bcbe810a40f816a286a0","task":"asr","tx":"0x7d40ce2d1842b3764a8a924afb1b90badf0d25a451541fe803f4ff2997c153e5"}
+2026-11-06T22:29:20.990Z INFO  [op0] committed {"jobId":"0x23f71d1407bb3eadf6bbf95ec39651a1de759158e952bcbe810a40f816a286a0","role":1,"behavior":"honest"}
+2026-11-06T22:29:21.805Z INFO  [keeper] drawAudit {"jobId":"0x23f71d1407bb3eadf6bbf95ec39651a1de759158e952bcbe810a40f816a286a0","tx":"0xbc6f562ef412316780966cde56e989bba66202cdcd4a307ce86db01e9b9801ff"}
+2026-11-06T22:29:23.105Z INFO  [op0] revealed {"jobId":"0x23f71d1407bb3eadf6bbf95ec39651a1de759158e952bcbe810a40f816a286a0","role":1}
+2026-11-06T22:29:45.032Z INFO  [keeper] settle {"jobId":"0x23f71d1407bb3eadf6bbf95ec39651a1de759158e952bcbe810a40f816a286a0","tx":"0x27e1674611190dbafd04cf129d1cd1c9712480b8b1620fee44769feaf3f2ca7f"}
+PASS e2e:validator-fail-no-money-effect (26.4 s) - date_iso failed on an honest transcript: reported only; executor paid, buyer not refunded
+2026-11-06T22:29:45.716Z INFO  [agent] buying {"task":"ocr","price":"11001000","class":"TOLERANCE","auditBps":1,"spentSoFar":"63003000"}
+2026-11-06T22:29:45.739Z INFO  [agent] paid {"jobId":"0x12b30547cd2d50c9a7c7b1220a35b35f102d5efd41f97f470e2f0ec2b254c4de","tx":"local-fake-4","link":"https://hashscan.io/testnet/transaction/local-fake-4"}
+2026-11-06T22:29:46.819Z INFO  [pipeline] job created {"jobId":"0x12b30547cd2d50c9a7c7b1220a35b35f102d5efd41f97f470e2f0ec2b254c4de","task":"ocr","tx":"0x10c19365ba27836a523698b6f4290f2e32df3bf2078d6f83a2013d08f87fdcd8"}
+2026-11-06T22:29:47.041Z INFO  [op5] output ready {"jobId":"0x12b30547cd2d50c9a7c7b1220a35b35f102d5efd41f97f470e2f0ec2b254c4de","role":1,"task":"ocr","behavior":"honest","words":7}
+2026-11-06T22:29:48.139Z INFO  [op5] committed {"jobId":"0x12b30547cd2d50c9a7c7b1220a35b35f102d5efd41f97f470e2f0ec2b254c4de","role":1,"behavior":"honest"}
+2026-11-06T22:29:48.667Z INFO  [keeper] drawAudit {"jobId":"0x12b30547cd2d50c9a7c7b1220a35b35f102d5efd41f97f470e2f0ec2b254c4de","tx":"0x28e671e344b4c0726b141518688433af9b78211c5af6ad53271675dab0a10e99"}
+2026-11-06T22:29:49.718Z INFO  [op5] revealed {"jobId":"0x12b30547cd2d50c9a7c7b1220a35b35f102d5efd41f97f470e2f0ec2b254c4de","role":1}
+2026-11-06T22:30:11.970Z INFO  [keeper] settle {"jobId":"0x12b30547cd2d50c9a7c7b1220a35b35f102d5efd41f97f470e2f0ec2b254c4de","tx":"0x443b8773bc21aa0d2331a338172e5ef2f42cee80127bba7210beb948935d5e59"}
+PASS e2e:honest-ocr (26.4 s) - OCR "exit only keep clear fire lane 56844" settled
+2026-11-06T22:30:12.835Z INFO  [gateway] task quotes reloaded {"asr":{"price":"0.31 HBAR","available":true},"ocr":{"price":"0.21 HBAR","available":true}}
+2026-11-06T22:30:12.839Z INFO  [agent] buying {"task":"asr","price":"31000000","class":"EXACT","auditBps":10000,"spentSoFar":"74004000"}
+2026-11-06T22:30:12.870Z INFO  [agent] paid {"jobId":"0xf4c320163ef43e01eed17e7d2f3824031513db7aa44760130f31578099e84f98","tx":"local-fake-5","link":"https://hashscan.io/testnet/transaction/local-fake-5"}
+2026-11-06T22:30:13.948Z INFO  [pipeline] job created {"jobId":"0xf4c320163ef43e01eed17e7d2f3824031513db7aa44760130f31578099e84f98","task":"asr","tx":"0x9281858dff66a98a2790e6b8ec256c4888c2c5414e625bd88f2a150c0b379037"}
+2026-11-06T22:30:14.120Z INFO  [op3] output ready {"jobId":"0xf4c320163ef43e01eed17e7d2f3824031513db7aa44760130f31578099e84f98","role":1,"task":"asr","behavior":"honest","words":12}
+2026-11-06T22:30:15.215Z INFO  [op3] committed {"jobId":"0xf4c320163ef43e01eed17e7d2f3824031513db7aa44760130f31578099e84f98","role":1,"behavior":"honest"}
+2026-11-06T22:30:16.129Z INFO  [keeper] drawAudit {"jobId":"0xf4c320163ef43e01eed17e7d2f3824031513db7aa44760130f31578099e84f98","tx":"0xfc927c844ba7d432f422c7cfc00ca034d679e4320e7c73825d0029ac6c70af01"}
+2026-11-06T22:30:16.145Z INFO  [op1] output ready {"jobId":"0xf4c320163ef43e01eed17e7d2f3824031513db7aa44760130f31578099e84f98","role":2,"task":"asr","behavior":"honest","words":12}
+2026-11-06T22:30:17.240Z INFO  [op1] committed {"jobId":"0xf4c320163ef43e01eed17e7d2f3824031513db7aa44760130f31578099e84f98","role":2,"behavior":"honest"}
+2026-11-06T22:30:17.753Z INFO  [op3] revealed {"jobId":"0xf4c320163ef43e01eed17e7d2f3824031513db7aa44760130f31578099e84f98","role":1}
+2026-11-06T22:30:18.701Z INFO  [op1] revealed {"jobId":"0xf4c320163ef43e01eed17e7d2f3824031513db7aa44760130f31578099e84f98","role":2}
+PASS e2e:audited-agree (6.9 s) - verifier re-ran blind and agreed; both paid
+2026-11-06T22:30:19.066Z INFO  [agent] buying {"task":"asr","price":"31000000","class":"EXACT","auditBps":10000,"spentSoFar":"105004000"}
+2026-11-06T22:30:19.095Z INFO  [agent] paid {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","tx":"local-fake-6","link":"https://hashscan.io/testnet/transaction/local-fake-6"}
+2026-11-06T22:30:19.806Z INFO  [op2] output ready {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":1,"task":"asr","behavior":"garbage","words":12}
+2026-11-06T22:30:20.172Z INFO  [pipeline] job created {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","task":"asr","tx":"0xee6d32ceb7ee3ee8a8e679576b6149fda16163e63a6d01c87e5668b6b476a168"}
+2026-11-06T22:30:20.916Z INFO  [op2] committed {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":1,"behavior":"garbage"}
+2026-11-06T22:30:21.940Z INFO  [keeper] drawAudit {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","tx":"0xf863c0af0045565fb18cf89b8733c1325269257dc1baa7fd12eaf9d02a0a1277"}
+2026-11-06T22:30:21.971Z INFO  [op5] output ready {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":2,"task":"asr","behavior":"honest","words":10}
+2026-11-06T22:30:23.061Z INFO  [op5] committed {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":2,"behavior":"honest"}
+2026-11-06T22:30:24.153Z INFO  [op2] revealed {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":1}
+2026-11-06T22:30:24.689Z INFO  [op5] revealed {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":2}
+2026-11-06T22:30:24.748Z INFO  [op0] output ready {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":3,"task":"asr","behavior":"honest","words":10}
+2026-11-06T22:30:24.763Z INFO  [op1] output ready {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":3,"task":"asr","behavior":"honest","words":10}
+2026-11-06T22:30:24.779Z INFO  [op3] output ready {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":3,"task":"asr","behavior":"honest","words":10}
+2026-11-06T22:30:25.873Z INFO  [op1] committed {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":3,"behavior":"honest"}
+2026-11-06T22:30:25.876Z INFO  [op3] committed {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":3,"behavior":"honest"}
+2026-11-06T22:30:25.879Z INFO  [op0] committed {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":3,"behavior":"honest"}
+2026-11-06T22:30:27.397Z INFO  [op0] revealed {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":3}
+2026-11-06T22:30:27.405Z INFO  [op1] revealed {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":3}
+2026-11-06T22:30:27.408Z INFO  [op3] revealed {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","role":3}
+2026-11-06T22:30:27.912Z INFO  [keeper] resolve {"jobId":"0x8b537127cba177aec7db850f8a07f5166c1bb97bef9ccaa188b2e02d461b4b0e","tx":"0x1d51636a29420b81adf695ea30c00b05b527e60ed1a70a2f0f3b4e20a6a042ea"}
+PASS e2e:garbage (10.2 s) - executor op2 slashed by the committee; buyer refunded
+2026-11-06T22:30:29.268Z INFO  [agent] buying {"task":"asr","price":"31000000","class":"EXACT","auditBps":10000,"spentSoFar":"136004000"}
+2026-11-06T22:30:29.292Z INFO  [agent] paid {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","tx":"local-fake-7","link":"https://hashscan.io/testnet/transaction/local-fake-7"}
+2026-11-06T22:30:30.123Z INFO  [op5] output ready {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":1,"task":"asr","behavior":"replay-other-input","words":10}
+2026-11-06T22:30:30.369Z INFO  [pipeline] job created {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","task":"asr","tx":"0x19ae43cf67808c4a3155f9ab6554113eb61dcbb7d382ed8a206f77dec3ba5cec"}
+2026-11-06T22:30:31.221Z INFO  [op5] committed {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":1,"behavior":"replay-other-input"}
+2026-11-06T22:30:32.037Z INFO  [keeper] drawAudit {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","tx":"0xd366f5d9c27ec0cd1da875153f7b5d75da617ed5c7bded2b825365bcce79b8bc"}
+2026-11-06T22:30:32.158Z INFO  [op0] output ready {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":2,"task":"asr","behavior":"honest","words":12}
+2026-11-06T22:30:33.253Z INFO  [op0] committed {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":2,"behavior":"honest"}
+2026-11-06T22:30:33.743Z INFO  [op5] revealed {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":1}
+2026-11-06T22:30:34.752Z INFO  [op0] revealed {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":2}
+2026-11-06T22:30:34.785Z INFO  [op4] output ready {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":3,"task":"asr","behavior":"honest","words":12}
+2026-11-06T22:30:34.800Z INFO  [op2] output ready {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":3,"task":"asr","behavior":"honest","words":12}
+2026-11-06T22:30:34.814Z INFO  [op3] output ready {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":3,"task":"asr","behavior":"honest","words":12}
+2026-11-06T22:30:35.910Z INFO  [op2] committed {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":3,"behavior":"honest"}
+2026-11-06T22:30:35.915Z INFO  [op3] committed {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":3,"behavior":"honest"}
+2026-11-06T22:30:35.919Z INFO  [op4] committed {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":3,"behavior":"honest"}
+2026-11-06T22:30:37.465Z INFO  [op4] revealed {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":3}
+2026-11-06T22:30:37.472Z INFO  [op2] revealed {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":3}
+2026-11-06T22:30:37.478Z INFO  [op3] revealed {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","role":3}
+2026-11-06T22:30:37.835Z INFO  [keeper] resolve {"jobId":"0x221cb80ab506538b1ef1d58a0c3050f7ded8073d09da3ec0cfce3d98ebad3e07","tx":"0xc1ee59d8285684fb7407d4ce078fea2c3dc9d4a0be991cbd6b44ae4f384ef6ec"}
+PASS e2e:replay-other-input (10.2 s) - executor op5 slashed by the committee; buyer refunded
+2026-11-06T22:30:39.455Z INFO  [agent] buying {"task":"asr","price":"31000000","class":"EXACT","auditBps":10000,"spentSoFar":"167004000"}
+2026-11-06T22:30:39.478Z INFO  [agent] paid {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","tx":"local-fake-8","link":"https://hashscan.io/testnet/transaction/local-fake-8"}
+2026-11-06T22:30:39.541Z INFO  [pipeline] job created {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","task":"asr","tx":"0x0e7a2ec59649f4438d99c8dcd6710931b63580c6a5df75be820318383bfdcc97"}
+2026-11-06T22:30:40.191Z INFO  [op2] output ready {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":1,"task":"asr","behavior":"lazy-small-model","words":8}
+2026-11-06T22:30:41.288Z INFO  [op2] committed {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":1,"behavior":"lazy-small-model"}
+2026-11-06T22:30:41.709Z INFO  [op3] output ready {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":2,"task":"asr","behavior":"honest","words":11}
+2026-11-06T22:30:41.972Z INFO  [keeper] drawAudit {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","tx":"0x9bcd7b178116a8871427810125689e381c83f2bdf95620020b8fdb97bed12e9d"}
+2026-11-06T22:30:42.797Z INFO  [op3] committed {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":2,"behavior":"honest"}
+2026-11-06T22:30:43.785Z INFO  [op1] output ready {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":3,"task":"asr","behavior":"honest","words":11}
+2026-11-06T22:30:43.800Z INFO  [op4] output ready {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":3,"task":"asr","behavior":"honest","words":11}
+2026-11-06T22:30:43.814Z INFO  [op5] output ready {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":3,"task":"asr","behavior":"honest","words":11}
+2026-11-06T22:30:43.830Z INFO  [op2] revealed {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":1}
+2026-11-06T22:30:44.276Z INFO  [op3] revealed {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":2}
+2026-11-06T22:30:44.908Z INFO  [op1] committed {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":3,"behavior":"honest"}
+2026-11-06T22:30:44.912Z INFO  [op4] committed {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":3,"behavior":"honest"}
+2026-11-06T22:30:44.917Z INFO  [op5] committed {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":3,"behavior":"honest"}
+2026-11-06T22:30:46.438Z INFO  [op1] revealed {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":3}
+2026-11-06T22:30:46.444Z INFO  [op4] revealed {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":3}
+2026-11-06T22:30:46.450Z INFO  [op5] revealed {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","role":3}
+2026-11-06T22:30:46.746Z INFO  [keeper] resolve {"jobId":"0x7ea9493b44a0ad46166640965ac89f8f830546cf7c212f2df1a3157a47c42b89","tx":"0xaf46cbc805104b6f4395c2235fba04a7ae15a31ff6e78830a867c41e17de28ba"}
+PASS e2e:lazy-small-model (8.2 s) - executor op2 slashed by the committee; buyer refunded
+2026-11-06T22:30:47.673Z INFO  [agent] buying {"task":"asr","price":"31000000","class":"EXACT","auditBps":10000,"spentSoFar":"198004000"}
+2026-11-06T22:30:47.705Z INFO  [agent] paid {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","tx":"local-fake-9","link":"https://hashscan.io/testnet/transaction/local-fake-9"}
+2026-11-06T22:30:48.778Z INFO  [pipeline] job created {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","task":"asr","tx":"0xf2d8c464a67e08d4cccbcd5c08b6184d9f0184cef5e865f7b4b094c3da2bf5b8"}
+2026-11-06T22:30:49.170Z INFO  [op4] output ready {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":1,"task":"asr","behavior":"truncate","words":6}
+2026-11-06T22:30:50.269Z INFO  [op4] committed {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":1,"behavior":"truncate"}
+2026-11-06T22:30:50.678Z INFO  [op3] output ready {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":2,"task":"asr","behavior":"honest","words":10}
+2026-11-06T22:30:50.873Z INFO  [keeper] drawAudit {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","tx":"0xfd383cf5f4552db00d7456c14602ab4e3b7212f8cc98fcfb741e0714d235226c"}
+2026-11-06T22:30:51.767Z INFO  [op3] committed {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":2,"behavior":"honest"}
+2026-11-06T22:30:52.798Z INFO  [op4] revealed {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":1}
+2026-11-06T22:30:52.854Z INFO  [op0] output ready {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":3,"task":"asr","behavior":"honest","words":10}
+2026-11-06T22:30:52.869Z INFO  [op2] output ready {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":3,"task":"asr","behavior":"honest","words":10}
+2026-11-06T22:30:52.884Z INFO  [op5] output ready {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":3,"task":"asr","behavior":"honest","words":10}
+2026-11-06T22:30:53.327Z INFO  [op3] revealed {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":2}
+2026-11-06T22:30:53.978Z INFO  [op0] committed {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":3,"behavior":"honest"}
+2026-11-06T22:30:53.980Z INFO  [op2] committed {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":3,"behavior":"honest"}
+2026-11-06T22:30:53.984Z INFO  [op5] committed {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":3,"behavior":"honest"}
+2026-11-06T22:30:55.516Z INFO  [op0] revealed {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":3}
+2026-11-06T22:30:55.521Z INFO  [op2] revealed {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":3}
+2026-11-06T22:30:55.526Z INFO  [op5] revealed {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","role":3}
+2026-11-06T22:30:55.631Z INFO  [keeper] resolve {"jobId":"0x23b579957b8a2f133759d39d869e8dbd4e719bf951c57affc92a1bf5424a9771","tx":"0xa91a653a6ab883d61a7b96ae17c4349dde005adc8b37b1268f84e8f7b1f80f39"}
+PASS e2e:truncate (8.2 s) - executor op4 slashed by the committee; buyer refunded
+2026-11-06T22:30:56.799Z INFO  [gateway] task quotes reloaded {"asr":{"price":"0.21001 HBAR","available":true},"ocr":{"price":"0.11001 HBAR","available":true}}
+2026-11-06T22:30:56.802Z INFO  [agent] buying {"task":"asr","price":"21001000","class":"EXACT","auditBps":1,"spentSoFar":"229004000"}
+2026-11-06T22:30:56.833Z INFO  [agent] paid {"jobId":"0xc9d20701dd89ba8a04efbc4adccbb6608448979733639a29920e65c3e3c122b8","tx":"local-fake-10","link":"https://hashscan.io/testnet/transaction/local-fake-10"}
+2026-11-06T22:30:57.910Z INFO  [pipeline] job created {"jobId":"0xc9d20701dd89ba8a04efbc4adccbb6608448979733639a29920e65c3e3c122b8","task":"asr","tx":"0x78aa2e8c0c77e952833bb77acde72002bd93ae026d396b0aa96be2942f109ae5"}
+2026-11-06T22:30:58.132Z WARN  [op3] behavior=silent: not committing {"jobId":"0xc9d20701dd89ba8a04efbc4adccbb6608448979733639a29920e65c3e3c122b8","role":1}
+2026-11-06T22:31:19.843Z INFO  [keeper] expire {"jobId":"0xc9d20701dd89ba8a04efbc4adccbb6608448979733639a29920e65c3e3c122b8","tx":"0x0a4d5ee665cbc061fa1ab652c50fae730dd4a32ab7a1654d35c9afbf4ae02c5b"}
+PASS e2e:silent (25.3 s) - executor never committed: buyer refunded, half its bond penalized
+2026-11-06T22:31:21.143Z INFO  [agent] buying {"task":"asr","price":"21001000","class":"EXACT","auditBps":1,"spentSoFar":"250005000"}
+2026-11-06T22:31:21.172Z INFO  [agent] paid {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12","tx":"local-fake-11","link":"https://hashscan.io/testnet/transaction/local-fake-11"}
+2026-11-06T22:31:22.085Z INFO  [op5] output ready {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12","role":1,"task":"asr","behavior":"no-reveal","words":10}
+2026-11-06T22:31:22.249Z INFO  [pipeline] job created {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12","task":"asr","tx":"0x14073d4271188a750aa9b89e861430405913aa2daee992233fcc2356b63a6966"}
+2026-11-06T22:31:23.179Z INFO  [op5] committed {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12","role":1,"behavior":"no-reveal"}
+2026-11-06T22:31:23.666Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:24.000Z INFO  [keeper] drawAudit {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12","tx":"0x0077e9e09e1cb500fee9cb5495f11eccac995151ce21897ece9e61bc47720082"}
+2026-11-06T22:31:24.204Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:24.755Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:25.283Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:25.820Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:26.350Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:26.879Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:27.412Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:27.945Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:28.479Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:29.015Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:29.546Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:30.081Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:30.614Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:31.150Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:31.684Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:32.217Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:32.774Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:33.321Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:33.878Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:34.422Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:34.985Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:35.536Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:36.071Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:36.607Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:37.138Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:37.672Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:38.204Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:38.736Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:39.272Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:39.808Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:40.342Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:40.871Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:41.400Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:41.932Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:42.466Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:43.001Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:43.533Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:44.065Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:44.598Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:45.134Z WARN  [op5] behavior=no-reveal: withholding reveal {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12"}
+2026-11-06T22:31:45.650Z INFO  [keeper] expire {"jobId":"0x9f0ec0f214f4f749dbaaaef5f9c00312db20e03ebfc38fb26bec9f6107209b12","tx":"0xe26e452dbf35965fc473078b227fb69cc062c1cf374f5f1b541d747bf1eb69cd"}
+PASS e2e:no-reveal (26.4 s) - committed but withheld the reveal: refund + penalty
+2026-11-06T22:31:48.023Z INFO  [gateway] task quotes reloaded {"asr":{"price":"0.31 HBAR","available":true},"ocr":{"price":"0.21 HBAR","available":true}}
+2026-11-06T22:31:48.026Z INFO  [agent] buying {"task":"ocr","price":"21000000","class":"TOLERANCE","auditBps":10000,"spentSoFar":"271006000"}
+2026-11-06T22:31:48.049Z INFO  [agent] paid {"jobId":"0x158bd87feab7b647c17f00fc7282ca6a8542bb4ed6b2d962505a2a5eacb01829","tx":"local-fake-12","link":"https://hashscan.io/testnet/transaction/local-fake-12"}
+2026-11-06T22:31:49.055Z INFO  [op0] output ready {"jobId":"0x158bd87feab7b647c17f00fc7282ca6a8542bb4ed6b2d962505a2a5eacb01829","role":1,"task":"ocr","behavior":"honest","words":9}
+2026-11-06T22:31:49.127Z INFO  [pipeline] job created {"jobId":"0x158bd87feab7b647c17f00fc7282ca6a8542bb4ed6b2d962505a2a5eacb01829","task":"ocr","tx":"0xccf26d6608d25a093beb13a985a9e93c9bf409250a94ef9a5c741d19cc938b3e"}
+2026-11-06T22:31:50.158Z INFO  [op0] committed {"jobId":"0x158bd87feab7b647c17f00fc7282ca6a8542bb4ed6b2d962505a2a5eacb01829","role":1,"behavior":"honest"}
+2026-11-06T22:31:50.804Z INFO  [keeper] drawAudit {"jobId":"0x158bd87feab7b647c17f00fc7282ca6a8542bb4ed6b2d962505a2a5eacb01829","tx":"0xc4dc40568c16e06ce71517ae90e7114b31658c340c28ff01d8cbeb59de440d43"}
+2026-11-06T22:31:51.113Z INFO  [op2] output ready {"jobId":"0x158bd87feab7b647c17f00fc7282ca6a8542bb4ed6b2d962505a2a5eacb01829","role":2,"task":"ocr","behavior":"honest","words":9}
+2026-11-06T22:31:52.210Z INFO  [op2] committed {"jobId":"0x158bd87feab7b647c17f00fc7282ca6a8542bb4ed6b2d962505a2a5eacb01829","role":2,"behavior":"honest"}
+2026-11-06T22:31:52.690Z INFO  [op0] revealed {"jobId":"0x158bd87feab7b647c17f00fc7282ca6a8542bb4ed6b2d962505a2a5eacb01829","role":1}
+2026-11-06T22:31:53.664Z INFO  [op2] revealed {"jobId":"0x158bd87feab7b647c17f00fc7282ca6a8542bb4ed6b2d962505a2a5eacb01829","role":2}
+2026-11-06T22:31:54.880Z INFO  [op0] posted text {"jobId":"0x158bd87feab7b647c17f00fc7282ca6a8542bb4ed6b2d962505a2a5eacb01829","role":1}
+2026-11-06T22:31:55.329Z INFO  [op2] posted text {"jobId":"0x158bd87feab7b647c17f00fc7282ca6a8542bb4ed6b2d962505a2a5eacb01829","role":2}
+2026-11-06T22:31:56.137Z INFO  [keeper] compareTexts {"jobId":"0x158bd87feab7b647c17f00fc7282ca6a8542bb4ed6b2d962505a2a5eacb01829","tx":"0x8dad1c0184fa0e7c516cd1c5af2c417ca802799e40c4dde4264e7d7be8b2cd94"}
+PASS e2e:tolerance-honest-variation (8.7 s) - hashes differed, overlap 8888 bps >= tau: agreed, nobody slashed (edge case 14)
+2026-11-06T22:31:56.264Z INFO  [agent] buying {"task":"ocr","price":"21000000","class":"TOLERANCE","auditBps":10000,"spentSoFar":"292006000"}
+2026-11-06T22:31:56.287Z INFO  [agent] paid {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","tx":"local-fake-13","link":"https://hashscan.io/testnet/transaction/local-fake-13"}
+2026-11-06T22:31:56.865Z INFO  [op4] output ready {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":1,"task":"ocr","behavior":"garbage","words":12}
+2026-11-06T22:31:57.362Z INFO  [pipeline] job created {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","task":"ocr","tx":"0x491f186cfb589fc9f8e1723092f1094a0abc4e87147adba6eae5f5ca3a04d1d1"}
+2026-11-06T22:31:57.964Z INFO  [op4] committed {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":1,"behavior":"garbage"}
+2026-11-06T22:31:58.763Z INFO  [keeper] drawAudit {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","tx":"0xc7bde5d05b34c295ded838b4e9d6993e00c4b9fd9958a99558dd944ebd378bd5"}
+2026-11-06T22:31:59.037Z INFO  [op3] output ready {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":2,"task":"ocr","behavior":"honest","words":9}
+2026-11-06T22:32:00.133Z INFO  [op3] committed {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":2,"behavior":"honest"}
+2026-11-06T22:32:01.158Z INFO  [op4] revealed {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":1}
+2026-11-06T22:32:01.700Z INFO  [op3] revealed {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":2}
+2026-11-06T22:32:02.810Z INFO  [op4] posted text {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":1}
+2026-11-06T22:32:03.351Z INFO  [op3] posted text {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":2}
+2026-11-06T22:32:03.923Z INFO  [op5] output ready {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":3,"task":"ocr","behavior":"honest","words":9}
+2026-11-06T22:32:03.931Z INFO  [op1] output ready {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":3,"task":"ocr","behavior":"honest","words":9}
+2026-11-06T22:32:03.941Z INFO  [op2] output ready {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":3,"task":"ocr","behavior":"honest","words":9}
+2026-11-06T22:32:04.083Z INFO  [keeper] compareTexts {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","tx":"0x3d4cf43729676b54d8b10d9328c5543eab31c072e5b5ed30c25ae7d3112475e6"}
+2026-11-06T22:32:05.030Z INFO  [op2] committed {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":3,"behavior":"honest"}
+2026-11-06T22:32:05.034Z INFO  [op5] committed {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":3,"behavior":"honest"}
+2026-11-06T22:32:05.038Z INFO  [op1] committed {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":3,"behavior":"honest"}
+2026-11-06T22:32:06.575Z INFO  [op5] revealed {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":3}
+2026-11-06T22:32:06.580Z INFO  [op1] revealed {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":3}
+2026-11-06T22:32:06.584Z INFO  [op2] revealed {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","role":3}
+2026-11-06T22:32:07.816Z INFO  [keeper] resolve {"jobId":"0xa129411cffeef4542f3146849d852391bfe207e070148c541c777dec9acd8dd2","tx":"0x7db0d29ab63b2a6b8877625c59defe720d5de8670c18e30a58731e55aae56df5"}
+PASS e2e:tolerance-garbage (12.2 s) - tolerance dispute: texts posted, committee revealed text, executor slashed
+2026-11-06T22:32:08.458Z INFO  [agent] buying {"task":"asr","price":"31000000","class":"EXACT","auditBps":10000,"spentSoFar":"313006000"}
+2026-11-06T22:32:08.485Z INFO  [agent] paid {"jobId":"0xc54c197a3c7ae304b6771d15797ec61a1f53efeda2dac6ccad3432d25807878a","tx":"local-fake-14","link":"https://hashscan.io/testnet/transaction/local-fake-14"}
+2026-11-06T22:32:09.561Z INFO  [pipeline] job created {"jobId":"0xc54c197a3c7ae304b6771d15797ec61a1f53efeda2dac6ccad3432d25807878a","task":"asr","tx":"0x38dbf7ba1a5b490e23199a675ef050dbbdcef559a1144fc41739044844fd0e05"}
+2026-11-06T22:32:09.728Z INFO  [op4] output ready {"jobId":"0xc54c197a3c7ae304b6771d15797ec61a1f53efeda2dac6ccad3432d25807878a","role":1,"task":"asr","behavior":"honest","words":11}
+2026-11-06T22:32:10.828Z INFO  [op4] committed {"jobId":"0xc54c197a3c7ae304b6771d15797ec61a1f53efeda2dac6ccad3432d25807878a","role":1,"behavior":"honest"}
+2026-11-06T22:32:11.833Z WARN  [op2] behavior=silent: not committing {"jobId":"0xc54c197a3c7ae304b6771d15797ec61a1f53efeda2dac6ccad3432d25807878a","role":2}
+2026-11-06T22:32:11.974Z INFO  [keeper] drawAudit {"jobId":"0xc54c197a3c7ae304b6771d15797ec61a1f53efeda2dac6ccad3432d25807878a","tx":"0x64c6dda04f9410f34bd62d1f6c360375cf5ced9219f0a312c6eb9d7c3959cd40"}
+2026-11-06T22:32:33.643Z INFO  [keeper] expire {"jobId":"0xc54c197a3c7ae304b6771d15797ec61a1f53efeda2dac6ccad3432d25807878a","tx":"0x6db4d1c51ae8a5426a52d95248379c6493eabc11906c8799def6268b5b901664"}
+2026-11-06T22:32:34.087Z WARN  [op0] behavior=silent: not committing {"jobId":"0xc54c197a3c7ae304b6771d15797ec61a1f53efeda2dac6ccad3432d25807878a","role":2}
+2026-11-06T22:32:55.839Z INFO  [keeper] expire {"jobId":"0xc54c197a3c7ae304b6771d15797ec61a1f53efeda2dac6ccad3432d25807878a","tx":"0xbc966fb5673a4fb26efe5437abf4c776dc21c984cc3d568362596245529f566c"}
+2026-11-06T22:32:57.055Z INFO  [op4] revealed {"jobId":"0xc54c197a3c7ae304b6771d15797ec61a1f53efeda2dac6ccad3432d25807878a","role":1}
+2026-11-06T22:33:19.092Z INFO  [keeper] settle {"jobId":"0xc54c197a3c7ae304b6771d15797ec61a1f53efeda2dac6ccad3432d25807878a","tx":"0xfc1f73a91dcce8481180abf305d4cb1060f74a4d0e1f7cbaa0d3513a960b9c5d"}
+PASS e2e:verifier-noshow (70.7 s) - verifier no-show, re-draw, second no-show: settled with auditSkipped
+2026-11-06T22:33:19.196Z INFO  [agent] buying {"task":"asr","price":"31000000","class":"EXACT","auditBps":10000,"spentSoFar":"344006000"}
+2026-11-06T22:33:19.219Z INFO  [agent] paid {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","tx":"local-fake-15","link":"https://hashscan.io/testnet/transaction/local-fake-15"}
+2026-11-06T22:33:20.237Z INFO  [op4] output ready {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","role":1,"task":"asr","behavior":"garbage","words":12}
+2026-11-06T22:33:20.292Z INFO  [pipeline] job created {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","task":"asr","tx":"0xcd54c768ee4ded3d60bf5e3db1f5d5893b1c61772f314b6068b3b635fa9fcd2d"}
+2026-11-06T22:33:21.332Z INFO  [op4] committed {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","role":1,"behavior":"garbage"}
+2026-11-06T22:33:21.767Z INFO  [keeper] drawAudit {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","tx":"0x43c043e248bc3c548e6def419112bfd1a8dbdd43f76f8cea3effaf8c72e9f755"}
+2026-11-06T22:33:21.809Z INFO  [op1] output ready {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","role":2,"task":"asr","behavior":"honest","words":11}
+2026-11-06T22:33:22.898Z INFO  [op1] committed {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","role":2,"behavior":"honest"}
+2026-11-06T22:33:23.945Z INFO  [op4] revealed {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","role":1}
+2026-11-06T22:33:23.988Z WARN  [op0] behavior=silent: not committing {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","role":3}
+2026-11-06T22:33:23.990Z WARN  [op5] behavior=silent: not committing {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","role":3}
+2026-11-06T22:33:23.995Z WARN  [op2] behavior=silent: not committing {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","role":3}
+2026-11-06T22:33:24.477Z INFO  [op1] revealed {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","role":2}
+2026-11-06T22:33:45.627Z INFO  [keeper] expire {"jobId":"0xfd4c7ef83317237a34f98c25e55e5de3cfc2287dd1a50c76f564219f61c04f94","tx":"0xe60798cd2a16c266c61eb9c434a1ec0c39fa3a577744154d3c5453882641232d"}
+PASS e2e:inconclusive-refund (28.2 s) - committee no-show: inconclusive, buyer refunded, nobody slashed for being wrong
+2026-11-06T22:33:47.932Z INFO  [gateway] task quotes reloaded {"asr":{"price":"0.21001 HBAR","available":true},"ocr":{"price":"0.11001 HBAR","available":true}}
+2026-11-06T22:33:47.934Z INFO  [agent] buying {"task":"asr","price":"21001000","class":"EXACT","auditBps":1,"spentSoFar":"375006000"}
+2026-11-06T22:33:47.957Z INFO  [agent] paid {"jobId":"0x14f3ae7dff42d29ea48a150423dfea67893ad060b00ddb751ef759bafb797148","tx":"local-fake-16","link":"https://hashscan.io/testnet/transaction/local-fake-16"}
+2026-11-06T22:33:48.807Z INFO  [op5] output ready {"jobId":"0x14f3ae7dff42d29ea48a150423dfea67893ad060b00ddb751ef759bafb797148","role":1,"task":"asr","behavior":"honest","words":12}
+2026-11-06T22:33:49.033Z INFO  [pipeline] job created {"jobId":"0x14f3ae7dff42d29ea48a150423dfea67893ad060b00ddb751ef759bafb797148","task":"asr","tx":"0x595f27294be4cc8b05b554de1a58de2f8d6fd40a42b3333037fc5531cd4a1c7a"}
+2026-11-06T22:33:49.900Z INFO  [op5] committed {"jobId":"0x14f3ae7dff42d29ea48a150423dfea67893ad060b00ddb751ef759bafb797148","role":1,"behavior":"honest"}
+2026-11-06T22:33:50.751Z INFO  [keeper] drawAudit {"jobId":"0x14f3ae7dff42d29ea48a150423dfea67893ad060b00ddb751ef759bafb797148","tx":"0x754c5a5fd1de92e1eb6f9af72fcba8f595429d3f0b614b4b9afa25c018caa291"}
+2026-11-06T22:33:52.009Z INFO  [op5] revealed {"jobId":"0x14f3ae7dff42d29ea48a150423dfea67893ad060b00ddb751ef759bafb797148","role":1}
+2026-11-06T22:34:13.985Z INFO  [keeper] settle {"jobId":"0x14f3ae7dff42d29ea48a150423dfea67893ad060b00ddb751ef759bafb797148","tx":"0xfe1bfcdb01a4afabf8ebb9a9af909008e901f3a424727564443c411663240cac"}
+2026-11-06T22:34:14.300Z INFO  [agent] buying {"task":"asr","price":"21001000","class":"EXACT","auditBps":1,"spentSoFar":"396007000"}
+2026-11-06T22:34:14.336Z INFO  [agent] paid {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","tx":"local-fake-17","link":"https://hashscan.io/testnet/transaction/local-fake-17"}
+2026-11-06T22:34:14.887Z INFO  [op0] output ready {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":1,"task":"asr","behavior":"collude","words":12}
+2026-11-06T22:34:15.419Z INFO  [pipeline] job created {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","task":"asr","tx":"0xb22dbe998390f4e6cef616bb5bb8bd07278cc251dca3601c3e0204fcc43891aa"}
+2026-11-06T22:34:15.983Z INFO  [op0] committed {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":1,"behavior":"collude"}
+2026-11-06T22:34:17.109Z INFO  [keeper] drawAudit {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","tx":"0xdada8d5179786a0352a35ea0307039870b0cd61fa6172829444eb31cdfddec65"}
+2026-11-06T22:34:18.104Z INFO  [op0] revealed {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":1}
+2026-11-06T22:34:18.709Z INFO  [op2] output ready {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":2,"task":"asr","behavior":"honest","words":10}
+2026-11-06T22:34:19.207Z WARN  [challenger] challenged {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","reason":"commitment differs (exact class)","tx":"0xf1c3c1254601f7715bbbb713962dbd5d9173e5ff504897c2e00944ebb14507a0"}
+2026-11-06T22:34:19.804Z INFO  [op2] committed {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":2,"behavior":"honest"}
+2026-11-06T22:34:20.861Z INFO  [op1] output ready {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":3,"task":"asr","behavior":"collude","words":12}
+2026-11-06T22:34:20.874Z INFO  [op4] output ready {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":3,"task":"asr","behavior":"honest","words":10}
+2026-11-06T22:34:20.890Z INFO  [op5] output ready {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":3,"task":"asr","behavior":"honest","words":10}
+2026-11-06T22:34:21.365Z INFO  [op2] revealed {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":2}
+2026-11-06T22:34:21.983Z INFO  [op1] committed {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":3,"behavior":"collude"}
+2026-11-06T22:34:21.989Z INFO  [op5] committed {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":3,"behavior":"honest"}
+2026-11-06T22:34:21.995Z INFO  [op4] committed {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":3,"behavior":"honest"}
+2026-11-06T22:34:23.539Z INFO  [op4] revealed {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":3}
+2026-11-06T22:34:23.543Z INFO  [op5] revealed {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":3}
+2026-11-06T22:34:23.548Z INFO  [op1] revealed {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","role":3}
+2026-11-06T22:34:24.079Z INFO  [keeper] resolve {"jobId":"0x2782fe04bc79c405d797528e3dc40e4d0f74a020f566c7939a6d0cc5c9291e67","tx":"0x8e91c1c58c630b1dd63fc1d677630e674b949204d99c5af036fd7a367a896240"}
+PASS e2e:collude-challenge - executor op0 colluded; challenge drew honest verifier op2; committee slashed the executor; challenger got bond + finder share
+2026-11-06T22:34:24.542Z INFO  [agent] buying {"task":"asr","price":"21001000","class":"EXACT","auditBps":1,"spentSoFar":"417008000"}
+2026-11-06T22:34:24.577Z INFO  [agent] paid {"jobId":"0x28a83ffb836b0e4b7543b31390107f8d39c55fcd88dc448e973f4f969dcf6345","tx":"local-fake-18","link":"https://hashscan.io/testnet/transaction/local-fake-18"}
+2026-11-06T22:34:25.655Z INFO  [op0] output ready {"jobId":"0x28a83ffb836b0e4b7543b31390107f8d39c55fcd88dc448e973f4f969dcf6345","role":1,"task":"asr","behavior":"honest","words":12}
+2026-11-06T22:34:25.657Z INFO  [pipeline] job created {"jobId":"0x28a83ffb836b0e4b7543b31390107f8d39c55fcd88dc448e973f4f969dcf6345","task":"asr","tx":"0x003c5df759eecda1f2aa267b286f4497e2bda78fce8b49b5ec35e1dddebdbf6a"}
+2026-11-06T22:34:26.752Z INFO  [op0] committed {"jobId":"0x28a83ffb836b0e4b7543b31390107f8d39c55fcd88dc448e973f4f969dcf6345","role":1,"behavior":"honest"}
+2026-11-06T22:34:27.761Z INFO  [keeper] drawAudit {"jobId":"0x28a83ffb836b0e4b7543b31390107f8d39c55fcd88dc448e973f4f969dcf6345","tx":"0x1782f415f23eb045212fea4dcfed30dabd9d89a3f5e1cdd16207f8b6a8a9c99e"}
+2026-11-06T22:34:28.858Z INFO  [op0] revealed {"jobId":"0x28a83ffb836b0e4b7543b31390107f8d39c55fcd88dc448e973f4f969dcf6345","role":1}
+2026-11-06T22:34:29.950Z INFO  [op1] output ready {"jobId":"0x28a83ffb836b0e4b7543b31390107f8d39c55fcd88dc448e973f4f969dcf6345","role":2,"task":"asr","behavior":"honest","words":12}
+2026-11-06T22:34:31.033Z INFO  [op1] committed {"jobId":"0x28a83ffb836b0e4b7543b31390107f8d39c55fcd88dc448e973f4f969dcf6345","role":2,"behavior":"honest"}
+2026-11-06T22:34:32.608Z INFO  [op1] revealed {"jobId":"0x28a83ffb836b0e4b7543b31390107f8d39c55fcd88dc448e973f4f969dcf6345","role":2}
+PASS e2e:false-challenge - unjustified challenge: the verifier agreed, the challenge bond was split executor / slashPool
+2026-11-06T22:34:34.733Z INFO  [gateway] task quotes reloaded {"asr":{"price":"0.21001 HBAR","available":false},"ocr":{"price":"0.11001 HBAR","available":false}}
+2026-11-06T22:34:36.637Z INFO  [gateway] task quotes reloaded {"asr":{"price":"0.21001 HBAR","available":true},"ocr":{"price":"0.11001 HBAR","available":true}}
+PASS e2e:no-capacity (3.9 s) - refused before payment (gateway does not offer asr right now); nothing settled
+2026-11-06T22:34:37.853Z INFO  [pipeline] job created {"jobId":"0xd91ca8afaffd1a3216843dcf483f98b7ab3dd2580318caa1a9ffa455ff9493d6","task":"asr","tx":"0x5a012fd141798fbfdabee6f6fca006d1b898eaef9817f0ea72bcefc98397b705"}
+2026-11-06T22:34:37.889Z INFO  [op3] output ready {"jobId":"0xd91ca8afaffd1a3216843dcf483f98b7ab3dd2580318caa1a9ffa455ff9493d6","role":1,"task":"asr","behavior":"honest","words":11}
+2026-11-06T22:34:38.988Z INFO  [op3] committed {"jobId":"0xd91ca8afaffd1a3216843dcf483f98b7ab3dd2580318caa1a9ffa455ff9493d6","role":1,"behavior":"honest"}
+2026-11-06T22:34:39.764Z INFO  [keeper] drawAudit {"jobId":"0xd91ca8afaffd1a3216843dcf483f98b7ab3dd2580318caa1a9ffa455ff9493d6","tx":"0x60da906e8149fa52760fc5825d08f974e01b7248597e2c21b8c03816bfe84450"}
+PASS e2e:replay-payment-x20 - 21 requests with one payment header -> 1 jobId, 1 on-chain job
+PASS verify:honest - 11 checks
+2026-11-06T22:34:41.110Z INFO  [op3] revealed {"jobId":"0xd91ca8afaffd1a3216843dcf483f98b7ab3dd2580318caa1a9ffa455ff9493d6","role":1}
+PASS verify:audited-agree - 13 checks
+PASS verify:garbage - 19 checks
+PASS verify:tolerance-honest-variation - 13 checks
+PASS verify:tolerance-garbage - 19 checks
+PASS verify:collude-challenge - 19 checks
+
+conservation: balance 6000300290007000 == accounted 6000300290007000 -> PASS
+agent spending: 18 calls, 4.38009 HBAR
+
+25/25 scenarios passed
+exit=0

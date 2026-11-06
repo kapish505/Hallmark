@@ -38,4 +38,11 @@ scripts/gen-vectors.ts
 scripts/measure.ts
 scripts/probe-hedera.ts
 scripts/probe-facilitators.ts
-docs/
+docs/*
+# the core-first docs named in the add-on spec are published; everything else in docs/ stays local
+!docs/CORE_MAP.md
+!docs/baseline-e2e.txt
+!docs/INTEGRATE.md
+!docs/RUN_AN_OPERATOR.md
+!docs/ADD_A_MODEL.md
+!docs/LIMITS.md
