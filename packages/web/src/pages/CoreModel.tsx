@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { analyse, fmtCeiling, parseMeasurements } from "@hallmark/simulator";
 import { formatHbar } from "@hallmark/shared";
-import md from "../../../../docs/MEASUREMENTS.md?raw";
+import md from "../../../simulator/src/measurements.json";
 
 const SWEEP = [500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10_000];
 
 export function CoreModelPage() {
-  const m = useMemo(() => parseMeasurements(md), []);
+  const m = useMemo(() => parseMeasurements(md as never), []);
   const [p, setP] = useState<number>(m.auditBps.value);
   const minBond = BigInt(Math.round(m.minBond.value));
   return (

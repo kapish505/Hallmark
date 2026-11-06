@@ -12,7 +12,7 @@
  *
  * Honest agreement: every input x runs x machines. Cheats: ASR tiny/base/small, truncate 60%, empty,
  * garbage, replay of another input; OCR fast engine, 50% downscale, 70% crop, empty, garbage, replay.
- * Writes docs/gates/G3.<task>.json and prints the table for docs/MEASUREMENTS.md.
+ * Writes docs/gates/G3.<task>.json and prints the table; copy the values into packages/simulator/src/measurements.json.
  * Compute saved by a cheat is measured as a time ratio and converted with --honest-cost-tinybar,
  * which is an operator estimate: it is labelled "assumed" in the output.
  */
@@ -264,6 +264,6 @@ for (const r of piRows) console.log(`| ${r.cheat} | ${r.piBps} | ${(r.savedFract
 if (cls === "NOT_COVERABLE") console.log("\n!! NOT COVERABLE on this stack: restrict inputs or pin one hardware class, and say so in the README.");
 if (perInput.length) {
   console.log(`\naccuracy (A2): corpus ${accuracy.metric} ${(accuracy.corpusError * 100).toFixed(2)}% on ${perInput.length} inputs (${accuracy.referenceUnits} reference ${task === "asr" ? "words" : "characters"}), bootstrap 95% CI ${accuracy.ci95!.map((x) => (x * 100).toFixed(2) + "%").join(" - ")}`);
-  console.log(`registry: ${task.toUpperCase()}_ERROR_BPS=${accuracy.registry.expectedErrorBps} ${task.toUpperCase()}_ERROR_N=${accuracy.registry.errorSampleSize}  -> copy into docs/ACCURACY.md`);
+  console.log(`registry: ${task.toUpperCase()}_ERROR_BPS=${accuracy.registry.expectedErrorBps} ${task.toUpperCase()}_ERROR_N=${accuracy.registry.errorSampleSize}`);
 }
 console.log(`\nwrote docs/gates/${values.out ?? `G3.${task}.json`} (${basename(values.data)})`);

@@ -123,7 +123,7 @@ const scenarios: Record<string, S> = {
     const ev = await events(r.jobId);
     return ev.some((e) => e.name === "Challenged") ? `challenged; final status ${r.status}` : `no challenge (executor was honest or audited); status ${r.status}`;
   } },
-  "false-challenge": { audit: 3000, check: async (r0) => res(r0) && "run the challenger manually (see docs/gates/G5.md); honest result expected to settle" },
+  "false-challenge": { audit: 3000, check: async (r0) => res(r0) && "challenge an honest result manually with the challenger key; it is expected to settle" },
   "no-capacity": { audit: 3000, setup: () => operatorStep("withdraw free stake from operators until fewer than 2 + committeeSize are eligible"), check: async (r0) => {
     if (!(r0 instanceof Error)) return fail("expected a refusal");
     return `refused before payment: ${r0.message.slice(0, 80)}`;

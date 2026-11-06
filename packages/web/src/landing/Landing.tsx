@@ -106,6 +106,65 @@ const hubEdges: DEdge[] = [
 ];
 const hubProgram: DStep[] = ["buyer", "gw", "ev", "op", "ch", "vf"].map((id, i) => ({ edge: `h-${id}`, t0: i * 0.1, dur: 0.22 }));
 
+/* ------------------------------------------------------------------ problem story */
+const probNodes: DNode[] = [
+  { id: "agent", x: 100, y: 170, label: "Agent", sub: "pays per request" },
+  { id: "prov", x: 330, y: 170, label: "Inference provider", sub: "unchecked", w: 170 },
+  { id: "big", x: 560, y: 80, label: "Promised model", sub: "large, slow", kind: "ghost" },
+  { id: "small", x: 560, y: 260, label: "Served model", sub: "smaller, cheaper" },
+];
+const probEdges: DEdge[] = [
+  { id: "a-p", from: "agent", to: "prov" },
+  { id: "p-b", from: "prov", to: "big", via: [[450, 170], [450, 80]], dashed: true },
+  { id: "p-s", from: "prov", to: "small", via: [[450, 170], [450, 260]] },
+];
+const probProgram: DStep[] = [
+  { edge: "a-p", t0: 0, dur: 0.18, tag: "paid" },
+  { edge: "p-s", t0: 0.2, dur: 0.18, tone: "bad" },
+  { edge: "p-s", t0: 0.42, dur: 0.18, reverse: true, tone: "bad" },
+  { edge: "a-p", t0: 0.64, dur: 0.2, reverse: true, tag: "looks fine" },
+];
+const BEATS = [
+  ["An agent pays for a large model", "It calls an API and pays per request, with nobody watching."],
+  ["The provider serves a cheaper one", "A smaller model, a cropped input, or a cached answer costs a fraction to run."],
+  ["The answer looks the same", "Nothing in the output says which model made it. The agent has no recourse."],
+];
+
+/* ------------------------------------------------------------------ future scope */
+const SPECTRUM = [
+  { id: "exact", label: "Exact match", note: "same output, bit for bit" },
+  { id: "tol", label: "Tolerance", note: "close enough, by a measured threshold" },
+  { id: "stat", label: "Statistical", note: "distributions compared over many runs" },
+  { id: "proof", label: "Proof", note: "cryptographic proof of execution" },
+];
+const FUTURE = [
+  { kind: "Speech-to-text", method: "Pinned Whisper, normalized text, word-overlap tolerance", band: "exact", status: "Live" },
+  { kind: "OCR", method: "Pinned engine, normalized text, exact on one hardware class", band: "exact", status: "Live" },
+  { kind: "Embeddings", method: "Cosine distance between the executor's and the verifier's vectors", band: "tol", status: "Next" },
+  { kind: "Classification and detection", method: "Same top label, boxes compared by overlap", band: "tol", status: "Next" },
+  { kind: "LLM text generation", method: "Greedy decoding with token-by-token checks against a re-run", band: "stat", status: "Research" },
+  { kind: "Image generation", method: "Seeded runs compared by perceptual distance", band: "stat", status: "Research" },
+  { kind: "Agent tool calls", method: "Each step's input and output committed, the trace re-run in parts", band: "tol", status: "Research" },
+  { kind: "Small models", method: "Zero-knowledge proofs where the prover cost is acceptable", band: "proof", status: "Research" },
+];
+
+/* ------------------------------------------------------------------ why it matters */
+const WHY = [
+  { who: "For agents", title: "Spend without a person watching", line: "A bond and a refund stand behind every paid answer, so an agent can buy inference from operators it has never met." },
+  { who: "For developers", title: "Prove what you serve", line: "Sell a model with a public, on-chain record that the pinned model really ran, checked on a sample anyone can audit." },
+  { who: "For the ecosystem", title: "A neutral record of quality", line: "Slashes, refunds and audit results are public, so a marketplace can rank providers on evidence instead of claims." },
+];
+
+/* ------------------------------------------------------------------ comparison */
+const COMPARE: Array<{ name: string; check: string; penalty: string; cost: string; pay: string; us?: boolean }> = [
+  { name: "Hallmark", check: "Random blind re-run, committee on mismatch", penalty: "Bond slashed, buyer refunded", cost: "1 + audit rate", pay: "Per request over x402, HBAR", us: true },
+  { name: "Gensyn Verde", check: "Refereed delegation, disputes narrowed to one operation", penalty: "Stake at risk in a dispute", cost: "Low until a dispute", pay: "Network payments" },
+  { name: "EigenAI", check: "Deterministic inference, optimistic re-execution", penalty: "Restaked security", cost: "Low until a challenge", pay: "Service payments" },
+  { name: "Proof of Sampling", check: "Sampled checks as an incentive game", penalty: "Penalty on caught sampling", cost: "Set by the sampling rate", pay: "Protocol-specific" },
+  { name: "TOPLOC", check: "Hashes of model activations compared on re-run", penalty: "Depends on the deployment", cost: "Small proof per output", pay: "Not a payment protocol" },
+  { name: "zkML", check: "Zero-knowledge proof of the computation", penalty: "Invalid proofs rejected", cost: "High prover cost", pay: "Not a payment protocol" },
+];
+
 /* ------------------------------------------------------------------ research */
 const RESEARCH = [
   {
@@ -208,10 +267,10 @@ export function Landing() {
             Hallmark
           </a>
           <nav className="nav-links" aria-label="Sections">
+            <a href="#problem">Problem</a>
             <a href="#how">Protocol</a>
-            <a href="#bond">Bonds</a>
-            <a href="#network">Network</a>
-            <a href="#research">Research</a>
+            <a href="#future">Future</a>
+            <a href="#compare">Compare</a>
           </nav>
           <a className="btn btn-primary" href="/console">
             Open the console <Arrow />
@@ -223,20 +282,20 @@ export function Landing() {
         <section className="hero">
           <div className="wrap hero-in">
             <div className="hero-copy">
-              <p className="eyebrow">Live on Hedera testnet</p>
+              <p className="eyebrow">Verified inference · live on Hedera testnet</p>
               <h1>
-                Verified speech‑to‑text and OCR <em>for paying agents</em>
+                Verified AI inference <em>agents can pay for</em>
               </h1>
               <p className="lede">
-                Agents pay per request over x402. Bonded operators run pinned models, a random sample of jobs is re-run by a second operator, and a
-                failed check slashes the operator and refunds the buyer.
+                Agents pay per request over x402. Bonded operators run pinned models, a second operator re-runs a random sample, and a wrong answer
+                costs the operator its bond and refunds the buyer.
               </p>
               <div className="hero-actions">
                 <a className="btn btn-primary btn-xl" href="/console">
-                  Pay for a transcript <Arrow />
+                  Run a verified job <Arrow />
                 </a>
-                <a className="btn btn-ghost btn-xl" href="#how">
-                  See the job lifecycle
+                <a className="btn btn-ghost btn-xl" href="#problem">
+                  See why it matters
                 </a>
               </div>
               <dl className="facts">
@@ -245,7 +304,7 @@ export function Landing() {
                   <dd>30% of jobs re-run</dd>
                 </div>
                 <div>
-                  <dt>Models</dt>
+                  <dt>Live models</dt>
                   <dd>Whisper large-v3 · Tesseract 5</dd>
                 </div>
                 <div>
@@ -277,9 +336,38 @@ export function Landing() {
           </div>
         </section>
 
+        <section className="sec" id="problem">
+          <div className="wrap">
+            <div className="sec-head">
+              <p className="chap">01 · The problem</p>
+              <h2>Agents cannot see which model answered</h2>
+            </div>
+            <div className="problem">
+              <ol className="beats">
+                {BEATS.map(([t, l], i) => (
+                  <li key={t}>
+                    <span className="n">{String(i + 1).padStart(2, "0")}</span>
+                    <div>
+                      <h3>{t}</h3>
+                      <p>{l}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              <div className="frame">
+                <div className="frame-bar">
+                  <span>today, without a check</span>
+                </div>
+                <PulseDiagram width={680} height={340} nodes={probNodes} edges={probEdges} program={probProgram} cycle={3.6} stillAt={0.5} label="An agent pays an inference provider for a large model; the provider serves a smaller model and the answer comes back looking fine." />
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="sec" id="how">
           <div className="wrap">
             <div className="sec-head">
+              <p className="chap">02 · The protocol</p>
               <h2>One request, checked on a sample</h2>
               <p>Five steps, each a Hedera transaction anyone can open. The output stays hidden until the audit is decided.</p>
             </div>
@@ -323,6 +411,7 @@ export function Landing() {
         <section className="sec" id="bond">
           <div className="wrap split">
             <div className="sec-head">
+              <p className="chap">03 · The economics</p>
               <h2>Bonds sized so cheating loses money</h2>
               <p>
                 An operator saves compute by cheating, and is caught when the job is audited and the cheat shows. The bond covers the worst cheat on the
@@ -345,6 +434,7 @@ export function Landing() {
         <section className="sec" id="network">
           <div className="wrap">
             <div className="sec-head">
+              <p className="chap">04 · The network</p>
               <h2>Who does what</h2>
               <p>The contracts hold the escrow, the bonds and the record. Everyone else is replaceable and checked.</p>
             </div>
@@ -363,9 +453,95 @@ export function Landing() {
           </div>
         </section>
 
+        <section className="sec" id="future">
+          <div className="wrap">
+            <div className="sec-head">
+              <p className="chap">05 · Beyond speech and OCR</p>
+              <h2>The same check for every kind of inference</h2>
+              <p>The protocol does not care what the model does. Each model type only needs a way to decide whether two runs agree.</p>
+            </div>
+            <div className="spectrum" aria-hidden="true">
+              {SPECTRUM.map((b) => (
+                <div key={b.id} className={`band band-${b.id}`}>
+                  <span>{b.label}</span>
+                  <small>{b.note}</small>
+                </div>
+              ))}
+            </div>
+            <div className="future">
+              {FUTURE.map((f) => (
+                <article key={f.kind} className={`fcard band-${f.band}`}>
+                  <div className="fcard-top">
+                    <h3>{f.kind}</h3>
+                    <span className={`status s-${f.status.toLowerCase()}`}>{f.status}</span>
+                  </div>
+                  <p>{f.method}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="sec" id="why">
+          <div className="wrap">
+            <div className="sec-head">
+              <p className="chap">06 · Why it matters</p>
+              <h2>Paid inference needs a receipt and a recourse</h2>
+            </div>
+            <div className="why">
+              {WHY.map((w, i) => (
+                <article key={w.who} className="why-card">
+                  <div className="why-rule">
+                    <i style={{ animationDelay: `${i * 0.4}s` }} />
+                  </div>
+                  <small>{w.who}</small>
+                  <h3>{w.title}</h3>
+                  <p>{w.line}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="sec" id="compare">
+          <div className="wrap">
+            <div className="sec-head">
+              <p className="chap">07 · The landscape</p>
+              <h2>How Hallmark compares</h2>
+              <p>Verifiable inference is an active field. Hallmark joins per-request payment to a sampled re-run and a bond.</p>
+            </div>
+            <div className="cmp-wrap frame">
+              <table className="cmp">
+                <thead>
+                  <tr>
+                    <th>Project</th>
+                    <th>How results are checked</th>
+                    <th>If a result is wrong</th>
+                    <th>Compute overhead</th>
+                    <th>Payment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {COMPARE.map((c) => (
+                    <tr key={c.name} className={c.us ? "us" : ""}>
+                      <td>{c.name}</td>
+                      <td>{c.check}</td>
+                      <td>{c.penalty}</td>
+                      <td>{c.cost}</td>
+                      <td>{c.pay}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="cmp-note">Summaries of each project's public descriptions. They are complementary approaches, not rivals in every case.</p>
+          </div>
+        </section>
+
         <section className="sec" id="research">
           <div className="wrap">
             <div className="sec-head">
+              <p className="chap">08 · The research</p>
               <h2>Open research problems</h2>
               <p>Verifying inference cheaply is not solved. These are the bottlenecks we measured while building Hallmark.</p>
             </div>
@@ -386,11 +562,11 @@ export function Landing() {
 
         <section className="sec close">
           <div className="wrap close-in">
-            <h2>Pay for one verified transcript</h2>
-            <p>Connect a Hedera testnet wallet, upload a short clip or an image, and follow every step on HashScan.</p>
+            <h2>Run your first verified job</h2>
+            <p>Connect a Hedera testnet wallet, send a short clip or an image, and follow every step of the check on HashScan.</p>
             <div className="hero-actions">
               <a className="btn btn-primary btn-xl" href="/console">
-                Pay for a transcript <Arrow />
+                Run a verified job <Arrow />
               </a>
               <a className="btn btn-ghost btn-xl" href={HASHSCAN} target="_blank" rel="noreferrer">
                 See the contract on HashScan

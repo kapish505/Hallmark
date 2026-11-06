@@ -12,7 +12,7 @@ import {ModelRegistry} from "../src/ModelRegistry.sol";
 ///   optional per model X in {ASR, OCR}: X_ENABLE=true, X_CLASS (0 exact|1 tolerance), X_TAU_BPS,
 ///     X_FEE, X_C, X_MARGIN, X_PI_BPS, X_FP_BPS, X_MAX_WORDS, X_DIGEST, X_HW, X_ERROR_BPS, X_ERROR_N
 ///   X_C and X_PI_BPS are the WORST cheat's values (max of c'/(p*pi') - F over the G3 cheat set).
-///   Values must come from docs/MEASUREMENTS.md (G3); nothing is enabled by default.
+///   Values must come from the G3 calibration (scripts/calibrate.ts); nothing is enabled by default.
 contract Deploy is Script {
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");

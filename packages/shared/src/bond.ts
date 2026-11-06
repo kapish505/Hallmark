@@ -1,5 +1,5 @@
 /**
- * Bond math (section 3, docs/CORE_MODEL.md). Must match contracts/src/libs/BondMath.sol.
+ * Bond math. Must match contracts/src/libs/BondMath.sol.
  *   deterrence: B >= c / (p * pi) - F      fairness: B <= m / (p * fp)
  * All amounts tinybar (bigint); rates in basis points.
  */

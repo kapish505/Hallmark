@@ -4,7 +4,6 @@ RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json tsconfig.json ./
 COPY packages ./packages
-COPY docs/MEASUREMENTS.md ./docs/MEASUREMENTS.md
 RUN pnpm install --frozen-lockfile
 ARG VITE_GATEWAY_URL
 ARG VITE_WALLETCONNECT_PROJECT_ID

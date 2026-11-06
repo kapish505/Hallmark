@@ -6,7 +6,7 @@ import { analyse, fmtCeiling, parseMeasurements } from "./model.js";
 
 const { values } = parseArgs({
   options: {
-    file: { type: "string", default: join(import.meta.dirname, "../../../docs/MEASUREMENTS.md") },
+    file: { type: "string", default: join(import.meta.dirname, "measurements.json") },
     p: { type: "string" },
     sweep: { type: "boolean", default: false },
   },

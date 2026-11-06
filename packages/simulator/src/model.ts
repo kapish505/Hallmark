@@ -1,9 +1,8 @@
 import { bondWindow, formatHbar, type Cheat } from "@hallmark/shared";
 
 /**
- * Bond-window calculator (sections 3 and 9.5). Inputs come from the fenced JSON block tagged
- * `hallmark-measurements` in docs/MEASUREMENTS.md; every value carries its provenance so an
- * assumed number is never printed as a measured one.
+ * Bond-window calculator. Inputs come from src/measurements.json; every value carries its
+ * provenance so an assumed number is never printed as a measured one.
  */
 export type Provenance = "measured" | "assumed" | "cited";
 export interface Tagged<T = number> {
@@ -30,10 +29,8 @@ export interface Measurements {
   tasks: TaskMeasurements[];
 }
 
-export function parseMeasurements(markdown: string): Measurements {
-  const m = /```json hallmark-measurements\n([\s\S]*?)```/.exec(markdown);
-  if (!m) throw new Error("no ```json hallmark-measurements block in MEASUREMENTS.md");
-  return JSON.parse(m[1]) as Measurements;
+export function parseMeasurements(json: string | Measurements): Measurements {
+  return typeof json === "string" ? (JSON.parse(json) as Measurements) : json;
 }
 
 export function analyse(t: TaskMeasurements, auditBps: number, minBond: bigint) {

@@ -1,14 +1,29 @@
+# dependencies
 node_modules/
-.env
-env/*.env
-!env/*.env.example
-data/
-packages/web/.env
+contracts/lib/
+
+# build output
 packages/web/dist/
 contracts/out/
 contracts/cache/
 contracts/broadcast/
-canaries/
-contracts/lib/
-.DS_Store
+*.tsbuildinfo
+
+# secrets and local env (only the *.example templates are committed)
+.env
+.env.*
+!.env.example
+env/*.env
+env/probe.addresses
 deploy/.env
+packages/web/.env*
+
+# runtime data, samples and calibration inputs
+data/
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+.claude/
+*.log

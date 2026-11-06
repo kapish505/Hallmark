@@ -2,7 +2,7 @@
  * Gate G2: exercise the deployed Probe (and ProbeWrapper) on Hedera testnet and record real behavior.
  *   env: PROBE_ADDRESS, PROBE_WRAPPER_ADDRESS, PROBE_PRIVATE_KEY (ECDSA), optional HALLMARK_ADDRESS
  *        (to record deployed code size), RPC_URL, MIRROR_NODE_URL
- * Writes docs/gates/G2.raw.json; summarize it in docs/gates/G2.md.
+ * Writes docs/gates/G2.raw.json.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
