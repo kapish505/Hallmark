@@ -20,6 +20,9 @@ export function NetworkPanel({ selected, onSelect }: { selected: string; onSelec
     <aside className="side">
       <section className="panel">
         <header className="panel-head"><h2>Network</h2><span className="mono dim">{ops.length} operators</span></header>
+        {n.data?.stale && n.data.asOf && (
+          <p className="stale-note">As of {new Date(n.data.asOf).toLocaleTimeString()} · {n.data.staleReason ?? "refreshing"}</p>
+        )}
         <div className="stats">
           <div><span>{staked.toFixed(1)}</span><small>HBAR staked</small></div>
           <div><span>{locked.toFixed(2)}</span><small>locked in bonds</small></div>

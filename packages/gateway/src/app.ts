@@ -547,10 +547,14 @@ export function createApp(d: AppDeps) {
   });
 
   // ---------------------------------------------------------------- network
-  let networkCache: { at: number; body: unknown } | null = null;
-  app.get("/v1/network", async (_req, res) => {
-    if (networkCache && Date.now() - networkCache.at < 5000) return void res.json(networkCache.body);
-    try {
+  // Stale-while-revalidate: always answer from the last good snapshot and refresh in the background, one
+  // refresh at a time. A slow or failing public RPC (Hashio 502s, timeouts) then shows slightly old numbers
+  // instead of hanging the console or returning an error.
+  let networkCache: { at: number; body: Record<string, unknown> } | null = null;
+  let networkRefresh: Promise<void> | null = null;
+  let networkError: string | null = null;
+  const refreshNetwork = () =>
+    (networkRefresh ??= (async () => {
       const core = d.contracts.core;
       const n = Number(await core.operatorCount());
       const ops = [];
@@ -572,10 +576,23 @@ export function createApp(d: AppDeps) {
         demoMode: cfg.demoMode,
       };
       networkCache = { at: Date.now(), body };
-      res.json(body);
-    } catch (e) {
-      res.status(502).json({ error: String(e) });
+      networkError = null;
+    })()
+      .catch((e) => {
+        networkError = String(e);
+        log.warn("network snapshot refresh failed; serving the last good one", { error: networkError.slice(0, 200) });
+      })
+      .finally(() => {
+        networkRefresh = null;
+      }));
+  app.get("/v1/network", async (_req, res) => {
+    if (!networkCache || Date.now() - networkCache.at > 5000) {
+      const r = refreshNetwork();
+      if (!networkCache) await r; // first request ever: nothing to serve yet
     }
+    if (!networkCache) return void res.status(503).json({ error: "network snapshot unavailable (the Hedera RPC is not answering); retry shortly" });
+    const ageMs = Date.now() - networkCache.at;
+    res.json({ ...networkCache.body, asOf: networkCache.at, stale: ageMs > 30_000, ...(networkError && ageMs > 30_000 ? { staleReason: "Hedera RPC unavailable" } : {}) });
   });
 
   // ---------------------------------------------------------------- demo (attack lab)

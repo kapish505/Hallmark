@@ -40,6 +40,9 @@ export interface NetworkView {
   pools: Record<string, string>;
   slashes: Array<{ who: string; amount: string; reason: string; jobId: string; link: string | null }>;
   demoMode: boolean;
+  asOf?: number;
+  stale?: boolean;
+  staleReason?: string;
 }
 
 export async function getJson<T>(path: string): Promise<T> {
