@@ -1,5 +1,5 @@
-import { JsonRpcProvider, Wallet } from "ethers";
-import { connect, ifaces, makeLogSource, TxSender, type ChainEnv, type Task } from "@hallmark/shared";
+import { Wallet } from "ethers";
+import { connect, ifaces, makeLogSource, makeProvider, rpcUrls, TxSender, type ChainEnv, type Task } from "@hallmark/shared";
 import { EvidenceClient } from "./evidence.js";
 import { HttpWorker } from "./worker.js";
 
@@ -9,7 +9,7 @@ export async function wire(
   privateKey: string,
   startCursor: string | null,
 ) {
-  const provider = new JsonRpcProvider(env.RPC_URL, env.CHAIN_ID, { staticNetwork: true });
+  const provider = makeProvider(rpcUrls(env.RPC_URL, env.RPC_FALLBACK_URLS), env.CHAIN_ID);
   const wallet = new Wallet(privateKey, provider);
   const contracts = connect(env, wallet);
   const sender = new TxSender(wallet, { defaultGasLimit: env.GAS_LIMIT_DEFAULT });

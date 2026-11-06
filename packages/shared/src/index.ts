@@ -12,3 +12,4 @@ export * from "./jobid.js";
 export * from "./http.js";
 export * from "./log.js";
 export * from "./validators.js";
+export * from "./rpc.js";

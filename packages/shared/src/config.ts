@@ -32,6 +32,8 @@ export const zEnv = { hex32, address, accountId, bool };
 /** Common chain config every service needs. Contract addresses come only from env. */
 export const ChainEnv = z.object({
   RPC_URL: z.string().url().default(DEFAULTS.rpcUrl),
+  /** tried in order when RPC_URL fails (timeouts, 429, 5xx); comma separated */
+  RPC_FALLBACK_URLS: z.string().default(DEFAULTS.rpcUrl),
   CHAIN_ID: z.coerce.number().int().default(HEDERA_TESTNET_CHAIN_ID),
   MIRROR_NODE_URL: z.string().url().default(DEFAULTS.mirrorNodeUrl),
   HASHSCAN_URL: z.string().url().default(DEFAULTS.hashscanUrl),

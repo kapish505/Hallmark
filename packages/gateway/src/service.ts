@@ -1,4 +1,4 @@
-import { JsonRpcProvider, Wallet } from "ethers";
+import { Wallet } from "ethers";
 import type { FacilitatorClient } from "@x402/core/server";
 import {
   connect,
@@ -14,6 +14,8 @@ import {
   type Contracts,
   type NormSpec,
   type Task,
+  makeProvider,
+  rpcUrls,
 } from "@hallmark/shared";
 import { HallmarkAgent } from "@hallmark/buyer-agent";
 import { createApp, type TaskConfig } from "./app.js";
@@ -68,7 +70,7 @@ export async function buildGateway(
   env: GatewayEnv,
   o: { facilitator: FacilitatorClient; facilitatorUrl: string; refunder?: Refunder },
 ) {
-  const provider = new JsonRpcProvider(env.RPC_URL, env.CHAIN_ID, { staticNetwork: true });
+  const provider = makeProvider(rpcUrls(env.RPC_URL, env.RPC_FALLBACK_URLS), env.CHAIN_ID);
   const wallet = new Wallet(env.GATEWAY_PRIVATE_KEY, provider);
   const contracts = connect(env, wallet);
   const sender = new TxSender(wallet, { defaultGasLimit: env.GAS_LIMIT_DEFAULT });
@@ -131,6 +133,7 @@ export async function buildGateway(
         accountId: env.CANARY_ACCOUNT_ID!,
         privateKey: env.CANARY_PRIVATE_KEY!,
         rpcUrl: env.RPC_URL,
+        rpcFallbackUrls: env.RPC_FALLBACK_URLS,
         policy: { maxPricePerCallTinybar: max, sessionBudgetTinybar: max * 10_000n },
       });
       canaryBuyer = {
