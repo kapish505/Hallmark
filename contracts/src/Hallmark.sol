@@ -31,7 +31,8 @@ contract Hallmark is Ownable, ReentrancyGuard {
         CommitteeCommit,
         CommitteeReveal,
         Settled,
-        Refunded
+        Refunded,
+        Voided // both drawn executors reported the input missing (add-on: open createJob)
     }
 
     struct Params {
@@ -88,6 +89,9 @@ contract Hallmark is Ownable, ReentrancyGuard {
         uint128 bond;
         uint128 challengeBond;
         uint128 reward;
+        address missingBy; // first executor that reported the input missing
+        uint64 finalizedAt; // when the job became final (0 while open)
+        bool executorSlashed; // refunded because the executor's output was found wrong
     }
 
     struct Seat {
@@ -131,6 +135,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
     uint8 internal constant PAY_FINDER = 4;
     uint8 internal constant PAY_CHALLENGE_REFUND = 5;
     uint8 internal constant PAY_CHALLENGE_FORFEIT = 6;
+    uint8 internal constant PAY_VOID = 7;
 
     bytes32 public constant COMMIT_DOMAIN = keccak256("HALLMARK_COMMIT_V2");
     address internal constant PRNG = address(0x169);
@@ -174,8 +179,10 @@ contract Hallmark is Ownable, ReentrancyGuard {
         bytes32 inputHash,
         uint256 price,
         uint256 bond,
-        address executor
+        address executor,
+        string locator
     );
+    event InputMissing(bytes32 indexed jobId, address indexed reporter, address next);
     event StatusChanged(bytes32 indexed jobId, Status status, uint64 deadline);
     event Committed(bytes32 indexed jobId, address indexed who, uint8 role);
     event AuditDrawn(bytes32 indexed jobId, bool audited, bool prng);
@@ -289,12 +296,8 @@ contract Hallmark is Ownable, ReentrancyGuard {
     }
 
     /// @notice Used by ModelRegistry for the bond-window check.
-    function auditBps() external view returns (uint16) {
-        return params.auditBps;
-    }
-
-    function minBond() external view returns (uint128) {
-        return params.minBond;
+    function bondParams() external view returns (uint16, uint128) {
+        return (params.auditBps, params.minBond);
     }
 
     // ---------------------------------------------------------------- operators
@@ -348,28 +351,38 @@ contract Hallmark is Ownable, ReentrancyGuard {
         returns (uint256 price, uint256 bond, uint256 ceiling, bool available)
     {
         ModelRegistry.Model memory m = registry.get(modelId);
-        Params memory p = params;
-        (bond, ceiling) = registry.window(m, p.auditBps, p.minBond);
-        price = m.fee + p.protocolFee + BondMath.auditFee(p.auditBps, p.arbCostEst);
-        available = m.enabled && bond <= ceiling && eligibleCount(bond) >= 2 + uint256(p.committeeSize);
+        (price, bond, ceiling,) = _price(m, params);
+        available = m.enabled && bond <= ceiling && eligibleCount(bond) >= 2 + uint256(params.committeeSize);
     }
 
-    function createJob(bytes32 jobId, address buyer, bytes32 inputHash, bytes32 saltCommit, bytes32 modelId)
+    function _price(ModelRegistry.Model memory m, Params memory p)
+        private
+        view
+        returns (uint256 price, uint256 bond, uint256 ceiling, uint256 aFee)
+    {
+        (bond, ceiling) = registry.window(m, p.auditBps, p.minBond);
+        aFee = BondMath.auditFee(p.auditBps, p.arbCostEst);
+        price = m.fee + p.protocolFee + aFee;
+    }
+
+    /// @notice Open to any account or contract. The caller pays `price` and is the buyer (refunds go to it);
+    ///         only the configured gateway may name a different buyer (the x402 payer). The input and
+    ///         the job salt must already be in the evidence store named by `locator`.
+    function createJob(bytes32 jobId, address buyer, bytes32 inputHash, bytes32 saltCommit, bytes32 modelId, string calldata locator)
         external
         payable
         nonReentrant
     {
-        if (msg.sender != gateway) revert NotGateway();
+        if (buyer != msg.sender && msg.sender != gateway) revert NotGateway();
+        if (bytes(locator).length > 256) revert BadArgs();
         Job storage j = _jobs[jobId];
         if (jobId == bytes32(0) || j.status != Status.None) revert JobExists();
         if (buyer == address(0) || inputHash == bytes32(0) || saltCommit == bytes32(0)) revert BadArgs();
         ModelRegistry.Model memory m = registry.get(modelId);
         if (!m.enabled) revert ModelDisabled();
         Params memory p = params;
-        (uint256 bond, uint256 ceil) = registry.window(m, p.auditBps, p.minBond);
+        (uint256 price, uint256 bond, uint256 ceil, uint256 aFee) = _price(m, p);
         if (bond > ceil) revert WindowEmpty(bond, ceil);
-        uint256 aFee = BondMath.auditFee(p.auditBps, p.arbCostEst);
-        uint256 price = m.fee + p.protocolFee + aFee;
         if (msg.value != price) revert WrongValue(price);
         if (eligibleCount(bond) < 2 + uint256(p.committeeSize)) revert NoCapacity();
 
@@ -385,7 +398,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
         address e = _draw(jobId, bond, _exclusions(jobId, j));
         j.executor = e;
         _lockSeat(jobId, e, bond, ROLE_EXECUTOR);
-        emit JobCreated(jobId, buyer, modelId, inputHash, price, bond, e);
+        emit JobCreated(jobId, buyer, modelId, inputHash, price, bond, e, locator);
         _setStatus(jobId, j, Status.Assigned, j.commitWindow);
     }
 
@@ -420,6 +433,8 @@ contract Hallmark is Ownable, ReentrancyGuard {
         if (block.timestamp > j.deadline) revert WindowClosed();
         Status st = j.status;
         if (st == Status.Assigned && msg.sender == j.executor) {
+            // the input was available after all: the first executor's "missing" claim was a no-show
+            _penalizeSeat(id, j, j.missingBy, R_NO_COMMIT);
             s.commitment = c;
             emit Committed(id, msg.sender, s.role);
             _setStatus(id, j, Status.Committed, j.drawWindow);
@@ -434,6 +449,29 @@ contract Hallmark is Ownable, ReentrancyGuard {
         } else {
             revert NotYourTurn();
         }
+    }
+
+    /// @notice The drawn executor could not get the input (or its salt) from the evidence store. Once per job:
+    ///         the first report re-draws a different executor; if that one also reports it, the job is
+    ///         voided (buyer refunded minus the void fee, the fee split between the two, nobody penalized).
+    ///         If the second executor commits instead, the first report is penalized as a no-show.
+    function reportInputMissing(bytes32 id) external nonReentrant {
+        Job storage j = _jobs[id];
+        if (j.status != Status.Assigned || msg.sender != j.executor) revert NotYourTurn();
+        if (block.timestamp > j.deadline) revert WindowClosed();
+        address first = j.missingBy;
+        if (first != address(0)) {
+            emit InputMissing(id, msg.sender, address(0));
+            _void(id, j, first);
+            return;
+        }
+        j.missingBy = msg.sender;
+        address e = _draw(id, j.bond, _exclusions(id, j));
+        if (e == address(0)) revert NoCapacity();
+        j.executor = e;
+        _lockSeat(id, e, j.bond, ROLE_EXECUTOR);
+        emit InputMissing(id, msg.sender, e);
+        _setStatus(id, j, Status.Assigned, j.commitWindow);
     }
 
     /// @notice Roll the audit AFTER the executor has committed. EOA-only, so a wrapper contract
@@ -672,6 +710,7 @@ contract Hallmark is Ownable, ReentrancyGuard {
             _close(id, j, Status.Settled);
         } else if (vOk && !eOk) {
             emit Resolved(id, OUT_EXECUTOR_WRONG, t.cE, t.cV, t.r);
+            j.executorSlashed = true;
             uint256 amt = _slashSeat(id, j, j.executor, R_WRONG);
             uint256 finder = amt * j.slashToFinderBps / 10_000;
             _credit(id, j.challenged ? j.challenger : j.verifier, finder, PAY_FINDER);
@@ -828,9 +867,22 @@ contract Hallmark is Ownable, ReentrancyGuard {
 
     /// @dev refund the full price; push with a bounded stipend, fall back to credits (edge case 17)
     function _refund(bytes32 id, Job storage j) private {
-        uint256 amt = uint256(j.fee) + j.protocolFee + j.auditFee;
-        escrow -= amt;
-        _close(id, j, Status.Refunded);
+        _payBack(id, j, 0, Status.Refunded);
+    }
+
+    /// @dev void fee = the job's protocol fee: kept from the refund and split between the two executors
+    function _void(bytes32 id, Job storage j, address first) private {
+        uint256 vf = j.protocolFee;
+        _credit(id, first, vf / 2, PAY_VOID);
+        _credit(id, j.executor, vf - vf / 2, PAY_VOID);
+        _payBack(id, j, vf, Status.Voided);
+    }
+
+    function _payBack(bytes32 id, Job storage j, uint256 kept, Status st) private {
+        uint256 total = uint256(j.fee) + j.protocolFee + j.auditFee;
+        escrow -= total;
+        uint256 amt = total - kept;
+        _close(id, j, st);
         (bool ok,) = j.buyer.call{value: amt, gas: PUSH_GAS}("");
         if (!ok) {
             credits[j.buyer] += amt;
@@ -842,12 +894,14 @@ contract Hallmark is Ownable, ReentrancyGuard {
     /// @dev final state: release every bond still held, record the outcome
     function _close(bytes32 id, Job storage j, Status st) private {
         _releaseSeat(id, j, j.executor);
+        _releaseSeat(id, j, j.missingBy);
         if (j.verifier != address(0)) _releaseSeat(id, j, j.verifier);
         address[] storage c = _committee[id];
         for (uint256 i; i < c.length; ++i) {
             _releaseSeat(id, j, c[i]);
         }
         j.status = st;
+        j.finalizedAt = uint64(block.timestamp);
         emit StatusChanged(id, st, 0);
         if (st == Status.Settled) emit JobSettled(id, j.audited && !j.auditSkipped, j.auditSkipped);
     }
@@ -916,12 +970,13 @@ contract Hallmark is Ownable, ReentrancyGuard {
 
     function _exclusions(bytes32 id, Job storage j) private view returns (address[] memory ex) {
         address[] storage c = _committee[id];
-        ex = new address[](3 + c.length);
+        ex = new address[](4 + c.length);
         ex[0] = j.executor;
         ex[1] = j.verifier;
         ex[2] = j.challenger;
+        ex[3] = j.missingBy;
         for (uint256 i; i < c.length; ++i) {
-            ex[3 + i] = c[i];
+            ex[4 + i] = c[i];
         }
     }
 

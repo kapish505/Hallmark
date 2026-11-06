@@ -4,15 +4,14 @@ pragma solidity 0.8.24;
 import {Script, console2} from "forge-std/Script.sol";
 import {Hallmark, IHallmarkJudge} from "../src/Hallmark.sol";
 import {HallmarkJudge} from "../src/HallmarkJudge.sol";
+import {HallmarkVerdict} from "../src/HallmarkVerdict.sol";
 import {ModelRegistry} from "../src/ModelRegistry.sol";
 
-/// @notice Deploy Judge, Registry, Hallmark, link them, optionally register models from env and
-///         print both bond limits per model. Refuses to enable a model whose window is empty.
-///   env: PRIVATE_KEY (owner), GATEWAY_ADDRESS
-///   optional per model X in {ASR, OCR}: X_ENABLE=true, X_CLASS (0 exact|1 tolerance), X_TAU_BPS,
-///     X_FEE, X_C, X_MARGIN, X_PI_BPS, X_FP_BPS, X_MAX_WORDS, X_DIGEST, X_HW, X_ERROR_BPS, X_ERROR_N
-///   X_C and X_PI_BPS are the WORST cheat's values (max of c'/(p*pi') - F over the G3 cheat set).
-///   Values must come from the G3 calibration (scripts/calibrate.ts); nothing is enabled by default.
+/// @notice Deploy Judge, Registry, Hallmark and the HallmarkVerdict view, and link them.
+///   env: PRIVATE_KEY (owner), GATEWAY_ADDRESS (the x402 gateway: the one caller that may name another buyer)
+///   Models are NOT registered here. Each model is a manifest (models/*.json): propose it with
+///   `hallmark-models propose <manifest>` and enable it from the owner with `hallmark-models enable`,
+///   which refuses a manifest whose bond window is empty (the registry checks again on chain).
 contract Deploy is Script {
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
@@ -23,41 +22,11 @@ contract Deploy is Script {
         ModelRegistry reg = new ModelRegistry(owner);
         Hallmark h = new Hallmark(owner, reg, IHallmarkJudge(address(judge)), gw);
         reg.setHallmark(address(h));
-        _model(reg, h, "ASR", 1);
-        _model(reg, h, "OCR", 2);
+        HallmarkVerdict verdict = new HallmarkVerdict(h);
         vm.stopBroadcast();
-        console2.log("HallmarkJudge ", address(judge));
-        console2.log("ModelRegistry ", address(reg));
-        console2.log("Hallmark      ", address(h));
-    }
-
-    function _model(ModelRegistry reg, Hallmark h, string memory k, uint8 spec) internal {
-        if (!vm.envOr(string.concat(k, "_ENABLE"), false)) {
-            console2.log(k, "not enabled (set", string.concat(k, "_ENABLE=true"), "with measured values)");
-            return;
-        }
-        ModelRegistry.Model memory m;
-        m.class = uint8(vm.envUint(string.concat(k, "_CLASS")));
-        m.tauBps = uint16(vm.envOr(string.concat(k, "_TAU_BPS"), uint256(0)));
-        m.normSpec = spec;
-        m.minWords = 1;
-        m.maxWords = uint16(vm.envOr(string.concat(k, "_MAX_WORDS"), uint256(96)));
-        m.enabled = true;
-        m.piBps = uint16(vm.envUint(string.concat(k, "_PI_BPS")));
-        m.fpBps = uint16(vm.envUint(string.concat(k, "_FP_BPS")));
-        m.fee = uint128(vm.envUint(string.concat(k, "_FEE")));
-        m.cTinybar = uint128(vm.envUint(string.concat(k, "_C")));
-        m.marginTinybar = uint128(vm.envUint(string.concat(k, "_MARGIN")));
-        m.expectedErrorBps = uint16(vm.envOr(string.concat(k, "_ERROR_BPS"), uint256(0))); // A2, informational
-        m.errorSampleSize = uint32(vm.envOr(string.concat(k, "_ERROR_N"), uint256(0)));
-        m.runtimeDigest = vm.envOr(string.concat(k, "_DIGEST"), bytes32(0));
-        m.hwClass = vm.envOr(string.concat(k, "_HW"), bytes32(0));
-        Hallmark.Params memory p = h.getParams();
-        (uint256 b, uint256 ceil) = reg.window(m, p.auditBps, p.minBond);
-        console2.log(k, "deterrence bond (tinybar):", b);
-        if (ceil == type(uint256).max) console2.log(k, "fairness ceiling: none (fp = 0)");
-        else console2.log(k, "fairness ceiling (tinybar):", ceil);
-        require(b <= ceil, string.concat(k, ": bond window is EMPTY at this audit rate; not enabling"));
-        reg.setModel(keccak256(bytes(vm.envOr(string.concat(k, "_MODEL_KEY"), string.concat(k, "_V1")))), m);
+        console2.log("HallmarkJudge  ", address(judge));
+        console2.log("ModelRegistry  ", address(reg));
+        console2.log("Hallmark       ", address(h));
+        console2.log("HallmarkVerdict", address(verdict));
     }
 }
