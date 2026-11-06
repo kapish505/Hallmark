@@ -70,7 +70,7 @@ export async function buildGateway(
   env: GatewayEnv,
   o: { facilitator: FacilitatorClient; facilitatorUrl: string; refunder?: Refunder },
 ) {
-  const provider = makeProvider(rpcUrls(env.RPC_URL, env.RPC_FALLBACK_URLS), env.CHAIN_ID);
+  const provider = makeProvider(rpcUrls(env.RPC_URL, env.RPC_FALLBACK_URLS), env.CHAIN_ID, { thirdwebSecretKey: env.THIRDWEB_SECRET_KEY });
   const wallet = new Wallet(env.GATEWAY_PRIVATE_KEY, provider);
   const contracts = connect(env, wallet);
   const sender = new TxSender(wallet, { defaultGasLimit: env.GAS_LIMIT_DEFAULT });
@@ -134,6 +134,7 @@ export async function buildGateway(
         privateKey: env.CANARY_PRIVATE_KEY!,
         rpcUrl: env.RPC_URL,
         rpcFallbackUrls: env.RPC_FALLBACK_URLS,
+        thirdwebSecretKey: env.THIRDWEB_SECRET_KEY,
         policy: { maxPricePerCallTinybar: max, sessionBudgetTinybar: max * 10_000n },
       });
       canaryBuyer = {

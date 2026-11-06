@@ -9,7 +9,7 @@ export async function wire(
   privateKey: string,
   startCursor: string | null,
 ) {
-  const provider = makeProvider(rpcUrls(env.RPC_URL, env.RPC_FALLBACK_URLS), env.CHAIN_ID);
+  const provider = makeProvider(rpcUrls(env.RPC_URL, env.RPC_FALLBACK_URLS), env.CHAIN_ID, { thirdwebSecretKey: env.THIRDWEB_SECRET_KEY });
   const wallet = new Wallet(privateKey, provider);
   const contracts = connect(env, wallet);
   const sender = new TxSender(wallet, { defaultGasLimit: env.GAS_LIMIT_DEFAULT });

@@ -22,7 +22,7 @@ export class FailoverRpcProvider extends JsonRpcProvider {
   constructor(
     private readonly urls: string[],
     chainId: number,
-    private readonly timeoutMs = 15_000,
+    private readonly opts: { timeoutMs?: number; thirdwebSecretKey?: string } = {},
   ) {
     super(urls[0], chainId, { staticNetwork: true });
     if (!urls.length) throw new Error("no RPC URLs configured");
@@ -35,7 +35,9 @@ export class FailoverRpcProvider extends JsonRpcProvider {
       const req = new FetchRequest(this.urls[i]);
       req.body = JSON.stringify(payload);
       req.setHeader("content-type", "application/json");
-      req.timeout = this.timeoutMs;
+      req.timeout = this.opts.timeoutMs ?? 15_000;
+      // thirdweb server-side auth: the secret key goes in a header, never in the URL
+      if (this.opts.thirdwebSecretKey && new URL(this.urls[i]).hostname.endsWith(".thirdweb.com")) req.setHeader("x-secret-key", this.opts.thirdwebSecretKey);
       try {
         const resp = await req.send();
         if (resp.statusCode < 200 || resp.statusCode >= 300) throw new Error(`HTTP ${resp.statusCode}`);
@@ -58,4 +60,4 @@ export function rpcUrls(primary: string | undefined, fallbacks: string | undefin
   return [...new Set(list)];
 }
 
-export const makeProvider = (urls: string[], chainId: number) => new FailoverRpcProvider(urls, chainId);
+export const makeProvider = (urls: string[], chainId: number, opts: { thirdwebSecretKey?: string } = {}) => new FailoverRpcProvider(urls, chainId, opts);

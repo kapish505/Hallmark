@@ -34,6 +34,8 @@ export const ChainEnv = z.object({
   RPC_URL: z.string().url().default(DEFAULTS.rpcUrl),
   /** tried in order when RPC_URL fails (timeouts, 429, 5xx); comma separated */
   RPC_FALLBACK_URLS: z.string().default(DEFAULTS.rpcUrl),
+  /** server-side thirdweb key, sent as the x-secret-key header to *.thirdweb.com relays */
+  THIRDWEB_SECRET_KEY: z.string().optional(),
   CHAIN_ID: z.coerce.number().int().default(HEDERA_TESTNET_CHAIN_ID),
   MIRROR_NODE_URL: z.string().url().default(DEFAULTS.mirrorNodeUrl),
   HASHSCAN_URL: z.string().url().default(DEFAULTS.hashscanUrl),

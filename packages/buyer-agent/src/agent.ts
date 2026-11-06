@@ -55,6 +55,7 @@ export interface AgentOptions {
   rpcUrl?: string;
   /** comma separated relays tried when rpcUrl fails (Hashio by default) */
   rpcFallbackUrls?: string;
+  thirdwebSecretKey?: string;
   hashscanUrl?: string;
 }
 
@@ -203,7 +204,7 @@ export class HallmarkAgent {
   /** add-on A1: recompute outCommit from the delivered text and the salt; compare with the chain. */
   private async checkCommitment(jobId: string, m: Manifest, text: string, jobSalt: string): Promise<boolean | null> {
     try {
-      const provider = makeProvider(rpcUrls(this.o.rpcUrl ?? DEFAULTS.rpcUrl, this.o.rpcFallbackUrls), m.chainId);
+      const provider = makeProvider(rpcUrls(this.o.rpcUrl ?? DEFAULTS.rpcUrl, this.o.rpcFallbackUrls), m.chainId, { thirdwebSecretKey: this.o.thirdwebSecretKey });
       const core = new Contract(m.contract, abis.Hallmark, provider);
       const j = await readJob(core, jobId);
       if (keccak256(jobSalt).toLowerCase() !== j.saltCommit.toLowerCase()) return false;
@@ -218,7 +219,7 @@ export class HallmarkAgent {
   /** T1 mitigation: the job the gateway created must commit to OUR audio. */
   private async onChainInputHash(jobId: string, m: Manifest): Promise<string | null> {
     try {
-      const provider = makeProvider(rpcUrls(this.o.rpcUrl ?? DEFAULTS.rpcUrl, this.o.rpcFallbackUrls), m.chainId);
+      const provider = makeProvider(rpcUrls(this.o.rpcUrl ?? DEFAULTS.rpcUrl, this.o.rpcFallbackUrls), m.chainId, { thirdwebSecretKey: this.o.thirdwebSecretKey });
       const core = new Contract(m.contract, abis.Hallmark, provider);
       const j = await readJob(core, jobId);
       if (j.status === 0) return null;
