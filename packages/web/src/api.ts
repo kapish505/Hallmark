@@ -1,6 +1,9 @@
 export const GATEWAY = (import.meta.env.VITE_GATEWAY_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 export const HASHSCAN = (import.meta.env.VITE_HASHSCAN_URL as string | undefined) ?? "https://hashscan.io/testnet";
 
+/** ngrok's free tier shows browsers a warning page unless this header is sent (harmless elsewhere) */
+export const TUNNEL_HEADERS: Record<string, string> = { "ngrok-skip-browser-warning": "1" };
+
 export interface JobEvent {
   name: string;
   args: Record<string, unknown>;
@@ -41,7 +44,7 @@ export interface NetworkView {
 
 export async function getJson<T>(path: string): Promise<T> {
   if (!GATEWAY) throw new Error("VITE_GATEWAY_URL is not set");
-  const r = await fetch(`${GATEWAY}${path}`);
+  const r = await fetch(`${GATEWAY}${path}`, { headers: TUNNEL_HEADERS });
   if (!r.ok && r.status !== 202 && r.status !== 409 && r.status !== 410) throw new Error(`${path}: HTTP ${r.status}`);
   return r.json() as Promise<T>;
 }

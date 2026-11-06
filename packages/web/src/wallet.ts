@@ -97,7 +97,12 @@ export async function payAndPost(
     ] as never,
     spendControls: { maxAmountPerPayment: false, allowedAssets: [{ network: NETWORK, asset: HBAR, maxAmountPerPayment: expect.maxTinybar.toString() }] },
   } as never);
-  const paid = wrapFetchWithPayment(fetch, client) as typeof fetch;
+  const tunnelFetch: typeof fetch = (input, init) => {
+    const req = new Request(input as RequestInfo, init);
+    req.headers.set("ngrok-skip-browser-warning", "1");
+    return fetch(req);
+  };
+  const paid = wrapFetchWithPayment(tunnelFetch, client) as typeof fetch;
   let res: Response;
   try {
     res = await paid(url, { method: "POST", body: form });

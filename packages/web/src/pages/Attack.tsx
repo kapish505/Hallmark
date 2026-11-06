@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GATEWAY } from "../api";
+import { GATEWAY, TUNNEL_HEADERS } from "../api";
 
 const BEHAVIORS = ["honest", "garbage", "replay-other-input", "lazy-small-model", "lazy-engine", "truncate", "silent", "no-reveal", "collude"];
 const ROLES = [
@@ -19,7 +19,7 @@ export function AttackPage() {
   const auth = { Authorization: `Bearer ${token}` };
 
   const apply = async (reset = false) => {
-    const r = await fetch(`${GATEWAY}/demo/behavior`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify(reset ? { operator: "all", reset: true } : { operator, behavior, role }) });
+    const r = await fetch(`${GATEWAY}/demo/behavior`, { method: "POST", headers: { ...TUNNEL_HEADERS, ...auth, "Content-Type": "application/json" }, body: JSON.stringify(reset ? { operator: "all", reset: true } : { operator, behavior, role }) });
     add(`${reset ? "reset all to honest" : `${operator}: ${behavior} ${ROLES.find((x) => x.v === role)!.label}`} -> HTTP ${r.status}`);
   };
   return (

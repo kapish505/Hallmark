@@ -1,0 +1,6 @@
+# Run the backend on a laptop (with docker-compose.prod.yml) and expose only the gateway, e.g. through a tunnel.
+#   docker compose -f docker-compose.prod.yml -f docker-compose.laptop.yml up -d --build \
+#     asr-worker ocr-worker gateway operator-1 operator-2 operator-3 challenger
+services:
+  gateway:
+    ports: ["8787:8787"]
