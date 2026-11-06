@@ -16,7 +16,7 @@
   --serif: "Instrument Serif", ui-serif, Georgia, serif;
   --sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --wrap: 1180px;
+  --wrap: 1280px;
   --gutter: clamp(16px, 4vw, 40px);
   --m-in: 140ms;
   --m-out: 200ms;

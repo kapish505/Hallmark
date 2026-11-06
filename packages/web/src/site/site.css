@@ -99,14 +99,14 @@
 .model-row { display: grid; grid-template-columns: 200px minmax(0, 1fr) auto; gap: 20px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
 
 /* ---------------------------------------------------------------- docs */
-.docs { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: clamp(28px, 4vw, 64px); padding-top: 48px; padding-bottom: 96px; }
+.docs { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: clamp(28px, 4vw, 64px); padding-top: 48px; padding-bottom: 96px; }
 .doc-toc { position: sticky; top: 88px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
 .doc-toc p { margin: 0 0 12px; }
 .doc-toc a { padding: 7px 10px; border-left: 1px solid var(--line); font-size: 14px; color: var(--paper-mute); text-decoration: none; transition: color 200ms ease, border-color 200ms ease; }
 .doc-toc a:hover { color: var(--paper); }
 .doc-toc a.is-on { color: var(--paper); border-left-color: var(--brass); }
 .doc-toc .doc-gh { margin-top: 16px; border-left-color: transparent; color: var(--brass); }
-.doc-body { min-width: 0; max-width: 780px; }
+.doc-body { min-width: 0; max-width: 1040px; }
 .doc-body > .lede { margin-bottom: 8px; }
 .doc-sec { padding-top: 48px; scroll-margin-top: 72px; }
 .doc-sec h2 { font-size: clamp(28px, 3vw, 36px); margin-bottom: 16px; }
@@ -153,3 +153,18 @@
 }
 .m-show { display: none; }
 @media (max-width: 720px) { .m-show { display: inline; } }
+
+/* ---------------------------------------------------------------- use the room on big screens */
+/* the hero is content-height, not forced to the full viewport (that left empty bands on large screens) */
+.hero-in { min-height: 0; padding-top: clamp(56px, 11vh, 150px); padding-bottom: clamp(56px, 11vh, 150px); }
+h1 { font-size: clamp(46px, 5.8vw, 88px); line-height: 0.98; }
+.lede { font-size: clamp(17px, 1.25vw, 20px); max-width: 32em; }
+h2 { font-size: clamp(36px, 4.1vw, 64px); }
+.sec-head { max-width: 48em; }
+.sec-head p { font-size: clamp(16px, 1.1vw, 19px); }
+.facts dd { font-size: 15.5px; }
+
+/* the whole page scales up on wide monitors: text, diagrams and code grow together */
+@media (min-width: 1600px) { .lp { zoom: 1.15; } }
+@media (min-width: 1880px) { .lp { zoom: 1.3; } }
+@media (min-width: 2300px) { .lp { zoom: 1.5; } }
