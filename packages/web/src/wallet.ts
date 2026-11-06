@@ -116,8 +116,23 @@ export async function payDirect(from: string, payToEvm: string, priceTinybar: st
     if (r?.status === "0x0") throw new Error("the HBAR transfer failed");
     await new Promise((res) => setTimeout(res, 1500));
   }
-  const res = await fetch(endpoint, { method: "POST", body: form, headers: { "X-Payment-Tx": tx, "ngrok-skip-browser-warning": "1" } });
-  return { status: res.status, body: (await res.json().catch(() => ({}))) as Record<string, unknown>, tx };
+  // The transfer is already final. Retry the POST on network errors and 5xx: the gateway treats a repeated
+  // transaction hash as the same job, so a retry can never charge twice.
+  let last: unknown = null;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (attempt) await new Promise((res) => setTimeout(res, 1500 * attempt));
+    try {
+      const res = await fetch(endpoint, { method: "POST", body: form, headers: { "X-Payment-Tx": tx, "ngrok-skip-browser-warning": "1" } });
+      if (res.status >= 500 && res.status !== 503 && attempt < 5) {
+        last = new Error(`gateway HTTP ${res.status}`);
+        continue;
+      }
+      return { status: res.status, body: (await res.json().catch(() => ({}))) as Record<string, unknown>, tx };
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw new Error(`Paid (transaction ${tx}) but the gateway could not be reached: ${String((last as Error)?.message ?? last)}. Keep this transaction hash: the gateway accepts it for 15 minutes.`);
 }
 
 const toBase64 = (b: Uint8Array) => {
