@@ -106,29 +106,87 @@ const hubEdges: DEdge[] = [
 ];
 const hubProgram: DStep[] = ["buyer", "gw", "ev", "op", "ch", "vf"].map((id, i) => ({ edge: `h-${id}`, t0: i * 0.1, dur: 0.22 }));
 
-/* ------------------------------------------------------------------ problem story */
-const probNodes: DNode[] = [
-  { id: "agent", x: 100, y: 170, label: "Agent", sub: "pays per request" },
-  { id: "prov", x: 330, y: 170, label: "Inference provider", sub: "unchecked", w: 170 },
-  { id: "big", x: 560, y: 80, label: "Promised model", sub: "large, slow", kind: "ghost" },
-  { id: "small", x: 560, y: 260, label: "Served model", sub: "smaller, cheaper" },
+/* ------------------------------------------------------------------ the gap: x402 alone vs with Hallmark */
+type Tone = "ok" | "bad" | "dim";
+type Row = [string, string, Tone];
+const CHEATS: Array<{ id: string; label: string; plain: Row[]; hm: Row[] }> = [
+  {
+    id: "honest",
+    label: "Honest provider",
+    plain: [["Payment", "Settled", "ok"], ["What ran", "Unknown", "dim"], ["Proof", "None", "dim"], ["If wrong", "No recourse", "dim"]],
+    hm: [["Payment", "Settled, held in escrow", "ok"], ["What ran", "Pinned model, answer sealed on chain", "ok"], ["Proof", "30% re-run blind by a second operator", "ok"], ["Outcome", "Paid, with a public receipt", "ok"]],
+  },
+  {
+    id: "small",
+    label: "Serves a cheaper model",
+    plain: [["Payment", "Settled", "ok"], ["What ran", "A smaller model. You can't tell", "bad"], ["Proof", "None", "dim"], ["If wrong", "Provider keeps the money", "bad"]],
+    hm: [["Payment", "Settled, held in escrow", "ok"], ["What ran", "Sealed answer from the cheap model", "dim"], ["Proof", "On audit, the re-run differs wherever the cheap model errs", "ok"], ["Outcome", "Committee confirms, bond slashed, full refund", "ok"]],
+  },
+  {
+    id: "trunc",
+    label: "Cuts the work short",
+    plain: [["Payment", "Settled", "ok"], ["What ran", "Half the input", "bad"], ["Proof", "None", "dim"], ["If wrong", "Provider keeps the money", "bad"]],
+    hm: [["Payment", "Settled, held in escrow", "ok"], ["What ran", "Sealed, shortened answer", "dim"], ["Proof", "Re-run commitment does not match", "ok"], ["Outcome", "Bond slashed, full refund", "ok"]],
+  },
+  {
+    id: "replay",
+    label: "Replays a cached answer",
+    plain: [["Payment", "Settled", "ok"], ["What ran", "Nothing. An old answer", "bad"], ["Proof", "None", "dim"], ["If wrong", "Provider keeps the money", "bad"]],
+    hm: [["Payment", "Settled, held in escrow", "ok"], ["What ran", "Sealed answer bound to this job's salt", "dim"], ["Proof", "Re-run on the real input does not match", "ok"], ["Outcome", "Bond slashed, full refund", "ok"]],
+  },
+  {
+    id: "vanish",
+    label: "Takes the money and stalls",
+    plain: [["Payment", "Settled", "ok"], ["What ran", "Nothing", "bad"], ["Proof", "None", "dim"], ["If wrong", "You wait. No refund path", "bad"]],
+    hm: [["Payment", "Settled, held in escrow", "ok"], ["What ran", "Nothing committed in the window", "dim"], ["Proof", "The deadline is on chain, on every job", "ok"], ["Outcome", "Bond penalized, refunded automatically", "ok"]],
+  },
 ];
-const probEdges: DEdge[] = [
-  { id: "a-p", from: "agent", to: "prov" },
-  { id: "p-b", from: "prov", to: "big", via: [[450, 170], [450, 80]], dashed: true },
-  { id: "p-s", from: "prov", to: "small", via: [[450, 170], [450, 260]] },
+
+/* ------------------------------------------------------------------ why Hedera */
+const HEDERA = [
+  { k: "PRNG precompile", title: "An audit draw nobody can steer", line: "The re-run is drawn from Hedera's native randomness after the executor has sealed its answer, in a call contracts cannot make, so it cannot be re-rolled." },
+  { k: "Seconds to finality", title: "Disputes in minutes, not days", line: "Commit, reveal and challenge windows of a few minutes are safe because every step is final within seconds." },
+  { k: "Predictable fees", title: "Per-request guarantees are affordable", line: "Fees are fixed in USD, so a job's price can include its escrow, its bond lock and its share of audits." },
+  { k: "x402 in HBAR", title: "Payment and proof on one ledger", line: "The x402 settlement, the job, the bonds and any slash or refund are all transactions on the same network, linked by job id." },
+  { k: "Mirror Node", title: "Anyone can re-derive the verdict", line: "Every commit, draw and slash is public. hallmark-verify recomputes a job's outcome from Mirror Node data alone." },
 ];
-const probProgram: DStep[] = [
-  { edge: "a-p", t0: 0, dur: 0.18, tag: "paid" },
-  { edge: "p-s", t0: 0.2, dur: 0.18, tone: "bad" },
-  { edge: "p-s", t0: 0.42, dur: 0.18, reverse: true, tone: "bad" },
-  { edge: "a-p", t0: 0.64, dur: 0.2, reverse: true, tag: "looks fine" },
-];
-const BEATS = [
-  ["An agent pays for a large model", "It calls an API and pays per request, with nobody watching."],
-  ["The provider serves a cheaper one", "A smaller model, a cropped input, or a cached answer costs a fraction to run."],
-  ["The answer looks the same", "Nothing in the output says which model made it. The agent has no recourse."],
-];
+
+function GapDemo() {
+  const [i, setI] = useState(1);
+  const c = CHEATS[i];
+  const col = (title: string, sub: string, rows: Row[], us: boolean) => (
+    <div className={`gap-col${us ? " us" : ""}`}>
+      <div className="gap-col-head">
+        <strong>{title}</strong>
+        <span className="mono dim small">{sub}</span>
+      </div>
+      <ul key={c.id}>
+        {rows.map(([k, v, t], n) => (
+          <li key={k} className={`t-${t}`} style={{ animationDelay: `${n * 70}ms` }}>
+            <span className="k">{k}</span>
+            <span className="v">{v}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+  return (
+    <div className="gap">
+      <div className="gap-pick" role="tablist" aria-label="What the provider does">
+        <span className="mono dim small">The provider…</span>
+        {CHEATS.map((x, n) => (
+          <button key={x.id} role="tab" aria-selected={n === i} className={n === i ? "is-on" : ""} onClick={() => setI(n)}>
+            {x.label}
+          </button>
+        ))}
+      </div>
+      <div className="gap-cols">
+        {col("x402 alone", "payment rail", c.plain, false)}
+        {col("x402 + Hallmark", "payment + verification", c.hm, true)}
+      </div>
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ future scope */
 const SPECTRUM = [
@@ -267,8 +325,9 @@ export function Landing() {
             Hallmark
           </a>
           <nav className="nav-links" aria-label="Sections">
-            <a href="#problem">Problem</a>
+            <a href="#problem">The gap</a>
             <a href="#how">Protocol</a>
+            <a href="#hedera">Hedera</a>
             <a href="#future">Future</a>
             <a href="#compare">Compare</a>
           </nav>
@@ -284,32 +343,33 @@ export function Landing() {
             <div className="hero-copy">
               <p className="eyebrow">Verified inference · live on Hedera testnet</p>
               <h1>
-                Verified AI inference <em>agents can pay for</em>
+                x402 moves the money. <em>Hallmark proves the work.</em>
               </h1>
               <p className="lede">
-                Agents pay per request over x402. Bonded operators run pinned models, a second operator re-runs a random sample, and a wrong answer
-                costs the operator its bond and refunds the buyer.
+                An agent paying for inference can't see the GPU. A provider can serve a cheaper model, cut the work short or replay an old answer, and
+                the payment still settles. Hallmark puts an operator bond behind every paid answer and re-runs a random sample, so cheating costs more
+                than it saves.
               </p>
               <div className="hero-actions">
                 <a className="btn btn-primary btn-xl" href="/console">
                   Run a verified job <Arrow />
                 </a>
                 <a className="btn btn-ghost btn-xl" href="#problem">
-                  See why it matters
+                  Try to cheat it
                 </a>
               </div>
               <dl className="facts">
                 <div>
-                  <dt>Audit rate</dt>
-                  <dd>30% of jobs re-run</dd>
+                  <dt>Behind every answer</dt>
+                  <dd>an operator bond</dd>
                 </div>
                 <div>
-                  <dt>Live models</dt>
-                  <dd>Whisper large-v3 · Tesseract 5</dd>
+                  <dt>Checked</dt>
+                  <dd>30% re-run blind</dd>
                 </div>
                 <div>
-                  <dt>Settlement</dt>
-                  <dd>HBAR over x402</dd>
+                  <dt>If it was wrong</dt>
+                  <dd>slashed, full refund</dd>
                 </div>
               </dl>
             </div>
@@ -339,28 +399,14 @@ export function Landing() {
         <section className="sec" id="problem">
           <div className="wrap">
             <div className="sec-head">
-              <p className="chap">01 · The problem</p>
-              <h2>Agents cannot see which model answered</h2>
+              <p className="chap">01 · The gap</p>
+              <h2>Paid is not the same as done</h2>
+              <p>
+                x402 gives agents a way to pay any API per request. It confirms the money moved. Nothing in it says which model answered, or whether
+                any work happened at all. Pick what the provider does.
+              </p>
             </div>
-            <div className="problem">
-              <ol className="beats">
-                {BEATS.map(([t, l], i) => (
-                  <li key={t}>
-                    <span className="n">{String(i + 1).padStart(2, "0")}</span>
-                    <div>
-                      <h3>{t}</h3>
-                      <p>{l}</p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-              <div className="frame">
-                <div className="frame-bar">
-                  <span>today, without a check</span>
-                </div>
-                <PulseDiagram width={680} height={340} nodes={probNodes} edges={probEdges} program={probProgram} cycle={3.6} stillAt={0.5} label="An agent pays an inference provider for a large model; the provider serves a smaller model and the answer comes back looking fine." />
-              </div>
-            </div>
+            <GapDemo />
           </div>
         </section>
 
@@ -453,10 +499,29 @@ export function Landing() {
           </div>
         </section>
 
+        <section className="sec" id="hedera">
+          <div className="wrap">
+            <div className="sec-head">
+              <p className="chap">05 · Why Hedera</p>
+              <h2>Verification needs a ledger that is fast, cheap and fair to draw from</h2>
+              <p>Sampled re-runs only deter cheating if the draw can't be gamed, disputes end quickly, and the whole record is public.</p>
+            </div>
+            <div className="hedera">
+              {HEDERA.map((h) => (
+                <article key={h.k} className="h-card">
+                  <span className="mono small h-k">{h.k}</span>
+                  <h3>{h.title}</h3>
+                  <p>{h.line}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section className="sec" id="future">
           <div className="wrap">
             <div className="sec-head">
-              <p className="chap">05 · Beyond speech and OCR</p>
+              <p className="chap">06 · Beyond speech and OCR</p>
               <h2>The same check for every kind of inference</h2>
               <p>The protocol does not care what the model does. Each model type only needs a way to decide whether two runs agree.</p>
             </div>
@@ -485,7 +550,7 @@ export function Landing() {
         <section className="sec" id="why">
           <div className="wrap">
             <div className="sec-head">
-              <p className="chap">06 · Why it matters</p>
+              <p className="chap">07 · Why it matters</p>
               <h2>Paid inference needs a receipt and a recourse</h2>
             </div>
             <div className="why">
@@ -506,7 +571,7 @@ export function Landing() {
         <section className="sec" id="compare">
           <div className="wrap">
             <div className="sec-head">
-              <p className="chap">07 · The landscape</p>
+              <p className="chap">08 · The landscape</p>
               <h2>How Hallmark compares</h2>
               <p>Verifiable inference is an active field. Hallmark joins per-request payment to a sampled re-run and a bond.</p>
             </div>
@@ -541,7 +606,7 @@ export function Landing() {
         <section className="sec" id="research">
           <div className="wrap">
             <div className="sec-head">
-              <p className="chap">08 · The research</p>
+              <p className="chap">09 · The research</p>
               <h2>Open research problems</h2>
               <p>Verifying inference cheaply is not solved. These are the bottlenecks we measured while building Hallmark.</p>
             </div>

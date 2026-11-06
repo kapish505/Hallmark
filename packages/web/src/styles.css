@@ -169,3 +169,23 @@ select:focus, input:focus { border-color: var(--brass-dim); outline: none; }
   .wallet-pop { right: -8px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition-duration: 0ms !important; } }
+
+/* ---------------------------------------------------------------- guarantee (what the receipt proves) */
+.guarantee { margin: 18px 0; padding: 18px; border: 1px solid var(--line-2); background: linear-gradient(180deg, color-mix(in srgb, var(--brass) 6%, var(--ink-2)), var(--ink-2)); }
+.g-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; margin-bottom: 12px; }
+.g-head .eyebrow-sm { margin: 0; color: var(--brass); }
+.g-head strong { font: 400 20px/1.2 var(--serif); color: var(--paper); letter-spacing: -0.01em; }
+.guarantee ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.guarantee li { display: grid; grid-template-columns: 10px 92px minmax(0, 1fr); align-items: center; gap: 12px; padding: 10px 12px; background: var(--ink); font-size: 13px; }
+.guarantee li i { width: 7px; height: 7px; border-radius: 50%; background: var(--paper-mute); }
+.guarantee .g-ok i { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent); }
+.guarantee .g-bad i { background: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 18%, transparent); }
+.guarantee .g-wait i { background: var(--brass); animation: gpulse 1.6s ease-in-out infinite; }
+.guarantee .g-dim .g-v { color: var(--paper-dim); }
+.g-k { font: 400 11px/1.2 var(--mono); color: var(--paper-mute); text-transform: uppercase; letter-spacing: .04em; }
+.g-v { color: var(--paper); line-height: 1.45; }
+.g-foot { margin: 10px 0 0; font-size: 12px; }
+@keyframes gpulse { 50% { opacity: .35; } }
+.pay-note { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--paper-dim); }
+.empty-state p + p { margin-top: 8px; }
+@media (max-width: 860px) { .guarantee li { grid-template-columns: 10px minmax(0, 1fr); } .guarantee .g-k { grid-column: 2; } .guarantee .g-v { grid-column: 2; } }

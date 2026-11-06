@@ -170,6 +170,12 @@ export function Composer({ onJob }: { onJob: (id: string, token: string) => void
       <button className="btn-pay" disabled={!file || !t?.available || !connected || busy} onClick={go}>
         {!connected ? "Connect a wallet to pay" : busy ? (phase === "signing" ? "Waiting for your wallet…" : "Submitting…") : `Pay ${t ? tinybarToHbar(t.priceTinybar) : ""} and run`}
       </button>
+      {t && (
+        <p className="pay-note">
+          Backed by a {tinybarToHbar(t.bondTinybar)} operator bond. A random {Math.round(t.auditBps / 100)}% of jobs are re-run by a second operator; a
+          wrong answer is slashed and you are refunded in full.
+        </p>
+      )}
       {msg && <p className={`status-line ${phase === "error" ? "bad" : phase === "done" ? "ok" : "dim"}`}>{msg}</p>}
       {manifest.error && <p className="status-line bad">Gateway unreachable.</p>}
     </section>
