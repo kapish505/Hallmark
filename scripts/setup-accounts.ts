@@ -119,7 +119,18 @@ for (const s of services) {
     key = Wallet.createRandom().privateKey;
     writeFileSync(env(s.name), s.body(key), { mode: 0o600 });
     console.log(`created env/${s.name}.env (new key)`);
-  } else console.log(`kept env/${s.name}.env (existing key)`);
+  } else {
+    // keep every value already in the file (the key included); add any missing settings from the template
+    const existing = readFileSync(env(s.name), "utf8");
+    const have = new Map(existing.split("\n").map((l) => /^([A-Z0-9_]+)=(.*)$/.exec(l.trim())).filter((m): m is RegExpExecArray => !!m).map((m) => [m[1], m[2]]));
+    const merged = s.body(key).split("\n").map((l) => {
+      const m = /^([A-Z0-9_]+)=(.*)$/.exec(l);
+      return m && have.has(m[1]) && have.get(m[1]) !== "" ? `${m[1]}=${have.get(m[1])}` : l;
+    });
+    const extra = [...have.entries()].filter(([k]) => !merged.some((l) => l.startsWith(`${k}=`))).map(([k, v]) => `${k}=${v}`);
+    writeFileSync(env(s.name), [...merged.filter((l, i, a) => !(l === "" && i === a.length - 1)), ...extra].join("\n") + "\n", { mode: 0o600 });
+    console.log(`kept env/${s.name}.env (existing key, missing settings added)`);
+  }
   addrs[s.name] = new Wallet(key).address;
 }
 

@@ -1,35 +1,199 @@
 {
-  "auditBps": { "value": 3000, "source": "assumed", "note": "[DEMO] default audit rate" },
-  "minBond": { "value": 10000000, "source": "assumed", "note": "0.1 HBAR" },
+  "auditBps": {
+    "value": 3000,
+    "source": "measured",
+    "note": "on-chain parameter"
+  },
+  "minBond": {
+    "value": 10000000,
+    "source": "measured",
+    "note": "on-chain parameter, 0.1 HBAR"
+  },
   "tasks": [
     {
       "task": "asr",
-      "class": { "value": "EXACT", "source": "assumed", "note": "G3 decides EXACT vs TOLERANCE" },
-      "tauBps": { "value": 0, "source": "assumed" },
-      "fee": { "value": 20000000, "source": "assumed", "note": "F = 0.2 HBAR" },
-      "honestCost": { "value": 15000000, "source": "assumed", "note": "large-v3 CPU int8, one 15 s clip" },
-      "fpBps": { "value": 0, "source": "assumed", "note": "0 only if honest runs are bit-exact (G3)" },
+      "class": {
+        "value": "EXACT",
+        "source": "measured",
+        "note": "preliminary G3: 224/224 identical runs, one machine"
+      },
+      "tauBps": {
+        "value": 0,
+        "source": "measured"
+      },
+      "fee": {
+        "value": 10000000,
+        "source": "measured",
+        "note": "registered fee, 0.10 HBAR"
+      },
+      "honestCost": {
+        "value": 6000000,
+        "source": "assumed",
+        "note": "operator compute + gas estimate"
+      },
+      "fpBps": {
+        "value": 0,
+        "source": "measured",
+        "note": "preliminary G3"
+      },
       "cheats": [
-        { "name": "garbage", "c": { "value": 15000000, "source": "assumed" }, "piBps": { "value": 10000, "source": "assumed" } },
-        { "name": "replay-other-input", "c": { "value": 15000000, "source": "assumed" }, "piBps": { "value": 10000, "source": "assumed" } },
-        { "name": "model-tiny", "c": { "value": 13500000, "source": "assumed" }, "piBps": { "value": 5000, "source": "assumed" } },
-        { "name": "model-small", "c": { "value": 9000000, "source": "assumed" }, "piBps": { "value": 3000, "source": "assumed" } },
-        { "name": "truncate-60pct", "c": { "value": 6000000, "source": "assumed" }, "piBps": { "value": 9000, "source": "assumed" } }
+        {
+          "name": "garbage",
+          "c": {
+            "value": 6000000,
+            "source": "assumed"
+          },
+          "piBps": {
+            "value": 10000,
+            "source": "measured"
+          }
+        },
+        {
+          "name": "replay-other-input",
+          "c": {
+            "value": 6000000,
+            "source": "assumed"
+          },
+          "piBps": {
+            "value": 10000,
+            "source": "measured"
+          }
+        },
+        {
+          "name": "model-tiny",
+          "c": {
+            "value": 5766000,
+            "source": "measured",
+            "note": "96% of compute saved"
+          },
+          "piBps": {
+            "value": 6250,
+            "source": "measured"
+          }
+        },
+        {
+          "name": "model-base",
+          "c": {
+            "value": 5520000,
+            "source": "measured",
+            "note": "92% saved"
+          },
+          "piBps": {
+            "value": 2500,
+            "source": "measured"
+          }
+        },
+        {
+          "name": "model-small",
+          "c": {
+            "value": 4488000,
+            "source": "measured",
+            "note": "75% saved"
+          },
+          "piBps": {
+            "value": 1250,
+            "source": "measured"
+          }
+        },
+        {
+          "name": "truncate-60pct",
+          "c": {
+            "value": 2400000,
+            "source": "measured",
+            "note": "40% saved"
+          },
+          "piBps": {
+            "value": 10000,
+            "source": "measured"
+          }
+        }
       ]
     },
     {
       "task": "ocr",
-      "class": { "value": "TOLERANCE", "source": "assumed" },
-      "tauBps": { "value": 8500, "source": "assumed" },
-      "fee": { "value": 10000000, "source": "assumed", "note": "F = 0.1 HBAR" },
-      "honestCost": { "value": 6000000, "source": "assumed" },
-      "fpBps": { "value": 50, "source": "assumed", "note": "0.5% target from G3" },
+      "class": {
+        "value": "EXACT",
+        "source": "measured",
+        "note": "preliminary G3: 1,520/1,520 identical runs, one machine"
+      },
+      "tauBps": {
+        "value": 0,
+        "source": "measured"
+      },
+      "fee": {
+        "value": 6000000,
+        "source": "measured",
+        "note": "registered fee, 0.06 HBAR"
+      },
+      "honestCost": {
+        "value": 3500000,
+        "source": "assumed",
+        "note": "operator compute + gas estimate"
+      },
+      "fpBps": {
+        "value": 0,
+        "source": "measured",
+        "note": "preliminary G3"
+      },
       "cheats": [
-        { "name": "garbage", "c": { "value": 6000000, "source": "assumed" }, "piBps": { "value": 10000, "source": "assumed" } },
-        { "name": "replay-other-input", "c": { "value": 6000000, "source": "assumed" }, "piBps": { "value": 10000, "source": "assumed" } },
-        { "name": "engine-fast", "c": { "value": 4000000, "source": "assumed" }, "piBps": { "value": 3000, "source": "assumed" } },
-        { "name": "downscale-50pct", "c": { "value": 3000000, "source": "assumed" }, "piBps": { "value": 4000, "source": "assumed" } },
-        { "name": "crop-70pct", "c": { "value": 2000000, "source": "assumed" }, "piBps": { "value": 8000, "source": "assumed" } }
+        {
+          "name": "garbage",
+          "c": {
+            "value": 3500000,
+            "source": "assumed"
+          },
+          "piBps": {
+            "value": 10000,
+            "source": "measured"
+          }
+        },
+        {
+          "name": "replay-other-input",
+          "c": {
+            "value": 3500000,
+            "source": "assumed"
+          },
+          "piBps": {
+            "value": 10000,
+            "source": "measured"
+          }
+        },
+        {
+          "name": "engine-fast",
+          "c": {
+            "value": 1151500,
+            "source": "measured",
+            "note": "33% saved"
+          },
+          "piBps": {
+            "value": 1250,
+            "source": "measured"
+          }
+        },
+        {
+          "name": "downscale-50pct",
+          "c": {
+            "value": 301000,
+            "source": "measured",
+            "note": "9% saved"
+          },
+          "piBps": {
+            "value": 1250,
+            "source": "measured"
+          }
+        },
+        {
+          "name": "crop-70pct",
+          "c": {
+            "value": 70000,
+            "source": "measured",
+            "note": "2% saved"
+          },
+          "piBps": {
+            "value": 8750,
+            "source": "measured"
+          }
+        }
       ]
     }
   ]
