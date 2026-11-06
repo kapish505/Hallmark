@@ -50,6 +50,11 @@ Docs: [Integrate](docs/INTEGRATE.md) · [Run an operator](docs/RUN_AN_OPERATOR.m
 | ModelRegistry | [`0x5902c6e3020297B6Bf47bFf050357Df9108a234f`](https://hashscan.io/testnet/contract/0x5902c6e3020297B6Bf47bFf050357Df9108a234f) |
 | HallmarkJudge | [`0x7897772347d5C5F5De067FbF0129b387a9E7d069`](https://hashscan.io/testnet/contract/0x7897772347d5C5F5De067FbF0129b387a9E7d069) |
 
+**Fresh-install smoke test on testnet (2026-11-07):** a non-gateway account created OCR job
+[`0x9a0a…30f4`](https://hashscan.io/testnet/transaction/0x6f98832b4950512b88c8b35d4967a9a908b3ee56de8ea3418308df359a666918)
+directly on the contract from the packed tarballs; a second operator re-ran it and the verdict is
+`FinalAudited`, with the delivered text matching the executor's on-chain commitment.
+
 All four are verified on Sourcify (exact match). The first deployment (`0xb719…d1c4`, gateway-only
 `createJob`) is retired; the payment below was settled on it.
 
