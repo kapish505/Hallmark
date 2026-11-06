@@ -46,7 +46,13 @@ export interface ResultView {
   accuracy?: { label: string };
 }
 export const useResult = (id: string, token: string) =>
-  useQuery({ queryKey: ["result", id.toLowerCase(), token], queryFn: () => getJson<ResultView>(`/v1/jobs/${id}/result?token=${token}`), enabled: !!token && /^0x[0-9a-fA-F]{64}$/.test(id), refetchInterval: 3000 });
+  useQuery({ queryKey: ["result", id.toLowerCase(), token], queryFn: () => getJson<ResultView>(`/v1/jobs/${id}/result?token=${token}`), enabled: !!token && /^0x[0-9a-fA-F]{64}$/.test(id),
+    // stop once the answer is final, or the job was refunded (410): neither changes again
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      return d && (d.error === "refunded" || (d.text !== undefined && !d.provisional)) ? false : 3000;
+    },
+  });
 
 /** seconds left until a unix deadline, ticking every second */
 export function useCountdown(deadline: number | null | undefined): number | null {

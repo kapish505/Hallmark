@@ -167,7 +167,12 @@ export async function buildGateway(
     canary,
     demo,
     direct: mirror
-      ? { lookup: (h) => mirror.evmTransfer(h), onPaid: (jobId, payer, settleTx) => pipeline.onSettled(jobId, payer, settleTx) }
+      ? { lookup: (h) => mirror.evmTransfer(h), onPaid: (jobId, payer, settleTx) => pipeline.onSettled(jobId, payer, settleTx),
+          onUnacceptable: (jobId, payer, settleTx) => {
+            db.update(jobId, { payment_status: "RefundPending", payer, settle_tx: settleTx });
+            void pipeline.refund(jobId);
+          },
+        }
       : undefined,
     cfg: {
       publicUrl: env.PUBLIC_URL,

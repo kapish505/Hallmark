@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GATEWAY, getJson, TUNNEL_HEADERS } from "../api";
 
 interface Scenario { id: string; title: string; expect: string; audit: number }
@@ -18,6 +18,7 @@ export function DemoDrawer({ selected }: { selected: string }) {
   const [token, setToken] = useState(read);
   const [active, setActive] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const qc = useQueryClient();
   const q = useQuery({ queryKey: ["scenarios"], queryFn: () => getJson<{ scenarios: Scenario[]; canSetAudit: boolean; demoMode: boolean }>("/demo/scenarios"), enabled: open });
   const save = (v: string) => {
     setToken(v);
@@ -54,7 +55,7 @@ export function DemoDrawer({ selected }: { selected: string }) {
           {q.data && !q.data.demoMode && <p className="dim small">Demo mode is off on this gateway.</p>}
           <div className="scen">
             {(q.data?.scenarios ?? []).map((s) => (
-              <button key={s.id} disabled={!token} className={active === s.id ? "is-on" : ""} title={s.expect} onClick={() => void act(s.title, async () => { const r = await post("/demo/scenario", { id: s.id }); setActive(s.id); return `set, audit ${r.audit}`; })}>
+              <button key={s.id} disabled={!token} className={active === s.id ? "is-on" : ""} title={s.expect} onClick={() => void act(s.title, async () => { const r = await post("/demo/scenario", { id: s.id }); setActive(s.id); void qc.invalidateQueries({ queryKey: ["manifest"] }); return `set, audit ${r.audit} (prices follow the audit rate)`; })}>
                 {s.title}
               </button>
             ))}

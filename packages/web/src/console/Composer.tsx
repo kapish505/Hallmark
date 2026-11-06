@@ -55,6 +55,11 @@ export function Composer({ onJob }: { onJob: (id: string, token: string) => void
   const go = async () => {
     if (!file || !t || !manifest.data || !connected) return;
     try {
+      // Re-read the price right before paying: it moves with the audit rate, and paying a stale price would be rejected.
+      setMsg("Checking the current price…");
+      const fresh = (await manifest.refetch()).data;
+      const t = fresh?.tasks.find((x) => x.task === task);
+      if (!fresh || !t || !t.available) throw new Error("This task is not available right now.");
       if (BigInt(t.priceTinybar) > BigInt(Math.round(Number(cap) * 1e8))) throw new Error("The price is above your per-call cap.");
       const f = new FormData();
       f.append("file", file);
@@ -64,11 +69,11 @@ export function Composer({ onJob }: { onJob: (id: string, token: string) => void
       let body: Record<string, unknown>;
       let status: number;
       if (w.kind === "evm" && w.evmAddress) {
-        if (!manifest.data.payToEvm) throw new Error("This gateway does not accept direct transfers.");
-        const r = await payDirect(w.evmAddress, manifest.data.payToEvm, t.priceTinybar, t.endpoint.replace(/\/v1\/(transcribe|ocr)$/, `/v1/direct/${task}`), f);
+        if (!fresh.payToEvm) throw new Error("This gateway does not accept direct transfers.");
+        const r = await payDirect(w.evmAddress, fresh.payToEvm, t.priceTinybar, t.endpoint.replace(/\/v1\/(transcribe|ocr)$/, `/v1/direct/${task}`), f);
         ({ body, status } = r);
       } else {
-        const r = await payAndPost(w.signer!, t.endpoint, f, { payTo: manifest.data.payTo, amountTinybar: t.priceTinybar, maxTinybar: BigInt(Math.round(Number(cap) * 1e8)) });
+        const r = await payAndPost(w.signer!, t.endpoint, f, { payTo: fresh.payTo, amountTinybar: t.priceTinybar, maxTinybar: BigInt(Math.round(Number(cap) * 1e8)) });
         ({ body, status } = r);
       }
       setPhase("submitting");

@@ -75,6 +75,8 @@ export interface AppDeps {
    */
   direct?: {
     lookup: (txHash: string) => Promise<{ ok: boolean; to: string; amountTinybar: bigint; consensusSeconds: number; transactionId: string; payer: string }>;
+    /** a transfer we cannot accept (underpaid or too old): refund it in full */
+    onUnacceptable: (jobId: string, payer: string, settleTx: string) => void;
     onPaid: (jobId: string, payer: string, settleTx: string) => void;
   };
   cfg: {
@@ -109,6 +111,8 @@ function rateLimit(perMin: number) {
     next();
   };
 }
+
+const ZERO_COMMIT = "0x" + "00".repeat(32);
 
 export function createApp(d: AppDeps) {
   const { db, cfg } = d;
@@ -289,7 +293,11 @@ export function createApp(d: AppDeps) {
           }
           const paymentKey = keccak256(new TextEncoder().encode(`direct:${txHash.toLowerCase()}`));
           const existing = db.jobByPaymentKey(paymentKey);
-          if (existing) return void res.status(202).json(accepted(existing)); // same transfer, same job
+          if (existing) {
+            const why = (JSON.parse(existing.meta || "{}") as { unacceptable?: string }).unacceptable;
+            if (why) return void res.status(402).json({ error: why, refunded: true, refundTx: existing.refund_tx });
+            return void res.status(202).json(accepted(existing)); // same transfer, same job
+          }
           // the Mirror Node indexes a transfer a few seconds after consensus
           let tr: Awaited<ReturnType<NonNullable<AppDeps["direct"]>["lookup"]>> | null = null;
           for (let i = 0; i < 12 && !tr; i++) {
@@ -299,10 +307,26 @@ export function createApp(d: AppDeps) {
           if (!tr) return void res.status(404).json({ error: "transfer not found on the Mirror Node yet; retry in a few seconds" });
           if (!tr.ok) return void res.status(402).json({ error: "the transfer did not succeed" });
           if (tr.to !== cfg.payToEvm.toLowerCase()) return void res.status(402).json({ error: `the transfer went to ${tr.to}, not to ${cfg.payToEvm}` });
-          if (tr.amountTinybar < t.priceTinybar) return void res.status(402).json({ error: `paid ${tr.amountTinybar} tinybar; the price is ${t.priceTinybar}` });
-          if (Date.now() / 1000 - tr.consensusSeconds > 900) return void res.status(402).json({ error: "the transfer is older than 15 minutes" });
           const inputHash = inputHashOf(bytes);
           const jobId = jobIdFor(inputHash, `direct:${txHash.toLowerCase()}`).toLowerCase();
+          // The money reached us but we cannot run the job (the price moved, or the transfer is too old to bind
+          // to a request). Never keep it: record it once under this payment key and refund the full amount.
+          const why =
+            tr.amountTinybar < t.priceTinybar
+              ? `paid ${tr.amountTinybar} tinybar but the price is now ${t.priceTinybar}; your transfer is being refunded in full`
+              : Date.now() / 1000 - tr.consensusSeconds > 900
+                ? "the transfer is older than 15 minutes; it is being refunded in full"
+                : null;
+          if (why) {
+            db.insertPending({
+              jobId, paymentKey, task, modelId: t.modelId, inputHash, bytes: bytes.length,
+              meta: { payment: "direct-transfer", unacceptable: why },
+              price: tr.amountTinybar, jobSalt: hexlify(randomBytes(32)), saltCommit: ZERO_COMMIT, accessToken: hexlify(randomBytes(24)), validator: "none",
+            });
+            d.direct.onUnacceptable(jobId, tr.payer, tr.transactionId);
+            log.warn("direct transfer not accepted; refunding", { jobId, why });
+            return void res.status(402).json({ error: why, refunded: true });
+          }
           d.blobs.put(bytes);
           const jobSalt = hexlify(randomBytes(32));
           const row = db.insertPending({

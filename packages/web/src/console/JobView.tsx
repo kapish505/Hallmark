@@ -179,7 +179,11 @@ export function JobView({ id, token }: { id: string; token: string }) {
             </div>
           </>
         ) : (
-          <p className="dim">{r.data?.error ?? "Waiting for the executor's answer…"}</p>
+          <p className="dim">
+            {r.data?.error === "refunded"
+              ? "This job was refunded, so no result is released. The full price went back to your wallet."
+              : (r.data?.error ?? "Waiting for the executor's answer…")}
+          </p>
         )}
       </div>
 

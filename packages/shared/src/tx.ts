@@ -30,6 +30,17 @@ export class TxSender {
     private readonly opts: { defaultGasLimit: number; confirmTimeoutMs?: number },
   ) {}
 
+  private priceCache: { at: number; v: bigint } | null = null;
+
+  /** The node's gas price, cached for a minute. */
+  private async gasPrice(): Promise<bigint> {
+    if (this.priceCache && Date.now() - this.priceCache.at < 60_000) return this.priceCache.v;
+    const v = (await this.wallet.provider!.getFeeData()).gasPrice;
+    if (v === null) throw new Error("the node returned no gas price");
+    this.priceCache = { at: Date.now(), v };
+    return v;
+  }
+
   get address() {
     return this.wallet.address;
   }
@@ -49,7 +60,10 @@ export class TxSender {
       } catch (e) {
         throw new TxRevert(decodeError(e));
       }
-      const populated = await fn.populateTransaction(...args, overrides);
+      // Legacy fee at the node's current gas price. With EIP-1559 fields ethers sets maxFeePerGas to ~2x the
+      // base fee, and Hedera requires balance >= value + gasLimit * maxFeePerGas up front, which doubled the
+      // reservation and made createJob fail with "insufficient funds" on a well-funded gateway.
+      const populated = { ...(await fn.populateTransaction(...args, overrides)), type: 0, gasPrice: await this.gasPrice() };
       let resp: TransactionResponse | null = null;
       for (let attempt = 0; attempt < 4 && !resp; attempt++) {
         try {
