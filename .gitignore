@@ -27,3 +27,15 @@ data/
 .vscode/
 .claude/
 *.log
+
+# tests and test-only tooling (kept locally, not published)
+contracts/test/
+packages/*/test/
+vitest.config.ts
+scripts/local/
+scripts/e2e-testnet.ts
+scripts/gen-vectors.ts
+scripts/measure.ts
+scripts/probe-hedera.ts
+scripts/probe-facilitators.ts
+docs/

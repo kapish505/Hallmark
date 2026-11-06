@@ -58,7 +58,6 @@ Fairness:    B ≤ m / (p · fp)
 ```
 contracts/               Foundry project
   src/                   Hallmark.sol, ModelRegistry.sol, HallmarkJudge.sol, libs/, Probe.sol
-  test/                  unit, fuzz, invariant, reentrancy and TS↔Solidity parity tests
   script/Deploy.s.sol    deployment with the bond-window check
   flat/                  single-file sources (Remix, verification)
 packages/
@@ -69,7 +68,7 @@ packages/
   verifier/              hallmark-verify: re-derives a job's verdict from public data
   simulator/             bond-window calculator
   web/                   landing page (/) and console (/console) with Hedera wallet payments
-scripts/                 calibration, Hedera probes, testnet e2e, account setup, local harness
+scripts/                 model calibration, account setup, ABI generation
 ```
 
 | Layer | Stack |
@@ -89,10 +88,9 @@ scripts/                 calibration, Hedera probes, testnet e2e, account setup,
 ```bash
 pnpm install
 pnpm setup:contracts                 # forge-std + OpenZeppelin
-cd contracts && forge build && forge test && cd ..
+cd contracts && forge build && cd ..
 pnpm gen:abi
-pnpm test                            # Vitest (spawns anvil for integration tests)
-pnpm e2e:local                       # full stack on a local chain
+pnpm typecheck
 ```
 
 Inference workers:
