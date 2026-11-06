@@ -31,6 +31,8 @@ export const Manifest = z.object({
   chainId: z.number(),
   contract: z.string(),
   facilitator: z.string(),
+  /** EVM address of payTo, for the direct-transfer payment option (EVM wallets such as MetaMask) */
+  payToEvm: z.string().optional(),
   tasks: z.array(TaskInfo),
   endpoints: z.object({ job: z.string(), result: z.string(), events: z.string() }),
 });
@@ -53,6 +55,7 @@ export type JobAccepted = z.infer<typeof JobAccepted>;
 export type Badge =
   | "pending"
   | "provisional (unaudited, bond-backed)"
+  | "settled (bond-backed, not audited)"
   | "audited (re-run agreed)"
   | "disputed"
   | "slashed"
@@ -68,7 +71,7 @@ export function badgeFor(j: {
   if (j.status === "Refunded") return j.slashedWrong ? "slashed" : "refunded";
   if (j.status === "Settled") {
     if (j.auditSkipped) return "audit skipped";
-    return j.audited ? "audited (re-run agreed)" : "provisional (unaudited, bond-backed)";
+    return j.audited ? "audited (re-run agreed)" : "settled (bond-backed, not audited)";
   }
   if (j.status === "Challenge") return "provisional (unaudited, bond-backed)";
   if (["Text", "CommitteeCommit", "CommitteeReveal"].includes(j.status)) return "disputed";

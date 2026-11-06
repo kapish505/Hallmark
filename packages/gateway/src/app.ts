@@ -69,9 +69,18 @@ export interface AppDeps {
   tasks: () => TaskConfig[];
   canary?: CanaryRunner;
   demo?: DemoController;
+  /**
+   * Direct-transfer payment option for EVM wallets (MetaMask cannot sign Hedera-native x402
+   * transfers): look up a transfer on the Mirror Node, and hand a verified payment to the pipeline.
+   */
+  direct?: {
+    lookup: (txHash: string) => Promise<{ ok: boolean; to: string; amountTinybar: bigint; consensusSeconds: number; transactionId: string; payer: string }>;
+    onPaid: (jobId: string, payer: string, settleTx: string) => void;
+  };
   cfg: {
     publicUrl: string;
     payTo: string;
+    payToEvm: string;
     chainId: number;
     hashscanUrl: string;
     facilitatorUrl: string;
@@ -134,6 +143,7 @@ export function createApp(d: AppDeps) {
       chainId: cfg.chainId,
       contract: cfg.contract,
       facilitator: cfg.facilitatorUrl,
+      payToEvm: cfg.payToEvm,
       tasks: d.tasks().map((t) => ({
         task: t.task,
         endpoint: `${cfg.publicUrl}${TASK_ENDPOINT[t.task]}`,
@@ -243,6 +253,82 @@ export function createApp(d: AppDeps) {
   }
 
   /** only the payer receives the 202, so it carries the bearer capability for this job */
+  // ---------------------------------------------------------------- direct transfer (EVM wallets)
+  /**
+   * POST /v1/direct/{asr|ocr} with header X-Payment-Tx: <EVM tx hash> of a plain HBAR transfer to payToEvm.
+   * The transfer must be SUCCESS on the Mirror Node, pay at least the price, be under 15 minutes old,
+   * and not have paid for another job. Agents use x402; this exists for wallets that cannot sign x402.
+   */
+  for (const task of ["asr", "ocr"] as Task[]) {
+    const maxBytes = task === "asr" ? cfg.maxAudioBytes : cfg.maxImageBytes;
+    app.post(
+      `/v1/direct/${task}`,
+      rateLimit(cfg.rateLimitPerMin),
+      (req, res, next) => upload.single("file")(req, res, (err) => (err ? res.status(400).json({ error: String(err.message ?? err) }) : next())),
+      async (req, res) => {
+        res.setHeader("Cache-Control", "no-store");
+        try {
+          const t = taskCfg(task);
+          if (!d.direct || !t || !t.available) return void res.status(503).json({ error: `${task} is not available right now` });
+          const txHash = String(req.header("x-payment-tx") ?? "");
+          if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) return void res.status(400).json({ error: "X-Payment-Tx must be the transaction hash of your HBAR transfer" });
+          if (!req.file) return void res.status(400).json({ error: "multipart field 'file' is required" });
+          const bytes = new Uint8Array(req.file.buffer);
+          if (bytes.length > maxBytes) return void res.status(413).json({ error: `input larger than ${maxBytes} bytes` });
+          let meta: Record<string, unknown>;
+          try {
+            meta = task === "asr" ? { ...checkCanonicalWav(bytes, cfg.maxAudioSeconds) } : { ...checkPng(bytes, cfg.maxImagePixels) };
+          } catch (e) {
+            return void res.status(415).json({ error: e instanceof MediaError ? e.message : "unreadable input" });
+          }
+          let validator;
+          try {
+            validator = parseValidator(typeof req.body?.validator === "string" ? req.body.validator : undefined);
+          } catch (e) {
+            return void res.status(400).json({ error: e instanceof ValidatorError ? e.message : "bad validator" });
+          }
+          const paymentKey = keccak256(new TextEncoder().encode(`direct:${txHash.toLowerCase()}`));
+          const existing = db.jobByPaymentKey(paymentKey);
+          if (existing) return void res.status(202).json(accepted(existing)); // same transfer, same job
+          // the Mirror Node indexes a transfer a few seconds after consensus
+          let tr: Awaited<ReturnType<NonNullable<AppDeps["direct"]>["lookup"]>> | null = null;
+          for (let i = 0; i < 12 && !tr; i++) {
+            tr = await d.direct.lookup(txHash).catch(() => null);
+            if (!tr) await new Promise((r) => setTimeout(r, 2000));
+          }
+          if (!tr) return void res.status(404).json({ error: "transfer not found on the Mirror Node yet; retry in a few seconds" });
+          if (!tr.ok) return void res.status(402).json({ error: "the transfer did not succeed" });
+          if (tr.to !== cfg.payToEvm.toLowerCase()) return void res.status(402).json({ error: `the transfer went to ${tr.to}, not to ${cfg.payToEvm}` });
+          if (tr.amountTinybar < t.priceTinybar) return void res.status(402).json({ error: `paid ${tr.amountTinybar} tinybar; the price is ${t.priceTinybar}` });
+          if (Date.now() / 1000 - tr.consensusSeconds > 900) return void res.status(402).json({ error: "the transfer is older than 15 minutes" });
+          const inputHash = inputHashOf(bytes);
+          const jobId = jobIdFor(inputHash, `direct:${txHash.toLowerCase()}`).toLowerCase();
+          d.blobs.put(bytes);
+          const jobSalt = hexlify(randomBytes(32));
+          const row = db.insertPending({
+            jobId,
+            paymentKey,
+            task,
+            modelId: t.modelId,
+            inputHash,
+            bytes: bytes.length,
+            meta: { ...meta, payment: "direct-transfer" },
+            price: t.priceTinybar,
+            jobSalt,
+            saltCommit: saltCommitOf(jobSalt),
+            accessToken: hexlify(randomBytes(24)),
+            validator: validator.name === "min_words" ? `min_words:${validator.arg}` : validator.name,
+          });
+          d.direct.onPaid(jobId, tr.payer, tr.transactionId);
+          res.status(202).json(accepted(row));
+        } catch (e) {
+          log.error("direct payment handler failed", { task, error: String(e) });
+          res.status(500).json({ error: "internal error" });
+        }
+      },
+    );
+  }
+
   function accepted(r: JobRow) {
     return {
       jobId: r.job_id,
@@ -294,7 +380,20 @@ export function createApp(d: AppDeps) {
     };
   }
 
-  app.get("/v1/jobs", (_req, res) => res.json(db.recentJobs(50).map(view)));
+  app.get("/v1/jobs", (req, res) => res.json(db.recentJobs(Math.min(50, Number(req.query.limit ?? 30) || 30)).map(view)));
+
+  /** public event stream for the console (every Hallmark contract event, as the indexer sees it) */
+  app.get("/v1/stream", (req, res) => {
+    res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive" });
+    res.write(": live\n\n");
+    const on = (e: { jobId: string | null; name: string; args: unknown; tx: string }) => res.write(`event: chain\ndata: ${JSON.stringify(e)}\n\n`);
+    d.indexer.bus.on("event", on);
+    const ping = setInterval(() => res.write(": ping\n\n"), 15_000);
+    req.on("close", () => {
+      clearInterval(ping);
+      d.indexer.bus.off("event", on);
+    });
+  });
   app.get("/v1/jobs/:id", (req, res) => {
     const r = db.job(req.params.id);
     if (!r) return void res.status(404).json({ error: "unknown job" });
@@ -424,7 +523,9 @@ export function createApp(d: AppDeps) {
   });
 
   // ---------------------------------------------------------------- network
+  let networkCache: { at: number; body: unknown } | null = null;
   app.get("/v1/network", async (_req, res) => {
+    if (networkCache && Date.now() - networkCache.at < 5000) return void res.json(networkCache.body);
     try {
       const core = d.contracts.core;
       const n = Number(await core.operatorCount());
@@ -437,7 +538,7 @@ export function createApp(d: AppDeps) {
       const p = await core.getParams();
       const [auditPool, slashPool, treasury, escrow] = await Promise.all([core.auditPool(), core.slashPool(), core.treasury(), core.escrow()]);
       const slashes = db.sql.prepare("SELECT args, tx_hash FROM events WHERE name = 'Slashed' ORDER BY id DESC LIMIT 50").all() as Array<{ args: string; tx_hash: string }>;
-      res.json({
+      const body = {
         contract: cfg.contract,
         params: Object.fromEntries(Object.entries(p.toObject()).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v])),
         tasks: d.tasks().map((t) => ({ ...t, priceTinybar: t.priceTinybar.toString(), bondTinybar: t.bondTinybar.toString() })),
@@ -445,7 +546,9 @@ export function createApp(d: AppDeps) {
         pools: { auditPool: auditPool.toString(), slashPool: slashPool.toString(), treasury: treasury.toString(), escrow: escrow.toString() },
         slashes: slashes.map((s) => ({ ...JSON.parse(s.args), link: link(s.tx_hash) })),
         demoMode: cfg.demoMode,
-      });
+      };
+      networkCache = { at: Date.now(), body };
+      res.json(body);
     } catch (e) {
       res.status(502).json({ error: String(e) });
     }

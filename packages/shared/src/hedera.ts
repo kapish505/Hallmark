@@ -67,7 +67,7 @@ export class MirrorNode {
   }
 
   contractResult(txHash: string) {
-    return fetchJson<{ gas_used: number; result: string; status: string; timestamp: string; error_message?: string }>(
+    return fetchJson<{ gas_used: number; result: string; status: string; timestamp: string; error_message?: string; from: string; to: string; amount: number; hash: string }>(
       `${this.base}/contracts/results/${txHash}`,
     );
   }
@@ -108,5 +108,20 @@ export class MirrorNode {
       url = next ? new URL(next, this.base.replace(/\/api\/v1$/, "")).toString() : null;
     }
     return out;
+  }
+
+  /**
+   * A plain HBAR transfer sent from an EVM wallet (MetaMask): who paid, to whom, how much (tinybar),
+   * when, and its Hedera transaction id. Throws until the Mirror Node has indexed it.
+   */
+  async evmTransfer(txHash: string) {
+    const r = await this.contractResult(txHash);
+    const t = await fetchJson<{ transactions: Array<{ transaction_id: string }> }>(`${this.base}/transactions?timestamp=${r.timestamp}`);
+    const txId = t.transactions[0]?.transaction_id;
+    if (!txId) throw new Error(`no transaction at ${r.timestamp} yet`);
+    // a long-zero sender is the account number itself; an alias is looked up
+    const from = r.from.toLowerCase();
+    const payer = /^0x0{24}/.test(from) ? `0.0.${BigInt(from)}` : (await this.account(from)).account;
+    return { ok: r.result === "SUCCESS", to: r.to.toLowerCase(), amountTinybar: BigInt(r.amount), consensusSeconds: Number(r.timestamp.split(".")[0]), transactionId: txId, payer };
   }
 }

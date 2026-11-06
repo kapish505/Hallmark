@@ -166,9 +166,13 @@ export async function buildGateway(
     tasks: () => tasks,
     canary,
     demo,
+    direct: mirror
+      ? { lookup: (h) => mirror.evmTransfer(h), onPaid: (jobId, payer, settleTx) => pipeline.onSettled(jobId, payer, settleTx) }
+      : undefined,
     cfg: {
       publicUrl: env.PUBLIC_URL,
       payTo,
+      payToEvm: wallet.address,
       chainId: env.CHAIN_ID,
       hashscanUrl: env.HASHSCAN_URL,
       facilitatorUrl: o.facilitatorUrl,
