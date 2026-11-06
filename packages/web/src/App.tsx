@@ -1,66 +1,70 @@
 import { useEffect, useState } from "react";
 import { GATEWAY } from "./api";
-import { JobPage } from "./pages/Job";
-import { TryPage } from "./pages/Try";
-import { NetworkPage } from "./pages/Network";
-import { CoreModelPage } from "./pages/CoreModel";
-import { AttackPage } from "./pages/Attack";
-import { VerifyPage } from "./pages/Verify";
 import { WalletButton, WalletProvider } from "./WalletContext";
+import { Composer } from "./console/Composer";
+import { JobView } from "./console/JobView";
+import { NetworkPanel } from "./console/NetworkPanel";
+import { DemoDrawer } from "./console/DemoDrawer";
+import { useStream } from "./console/live";
 
-const TABS = ["Try it", "Job", "Network", "Core model", "Attack lab", "Verify"] as const;
-type Tab = (typeof TABS)[number];
+const tokens = (): Record<string, string> => {
+  try {
+    return JSON.parse(localStorage.getItem("hm-tokens") ?? "{}");
+  } catch {
+    return {};
+  }
+};
 
 export function App() {
-  const [tab, setTab] = useState<Tab>(() => (location.hash === "#verify" ? "Verify" : "Try it"));
-  const [jobId, setJobId] = useState(() => new URLSearchParams(location.search).get("job") ?? "");
-  const [token, setToken] = useState(() => new URLSearchParams(location.search).get("token") ?? "");
+  const live = useStream();
+  const params = new URLSearchParams(location.search);
+  const [jobId, setJobId] = useState(params.get("job") ?? "");
+  const [token, setToken] = useState(params.get("token") ?? tokens()[(params.get("job") ?? "").toLowerCase()] ?? "");
   useEffect(() => {
-    if (jobId) history.replaceState(null, "", `?job=${jobId}${token ? `&token=${token}` : ""}`);
+    history.replaceState(null, "", jobId ? `/console?job=${jobId}${token ? `&token=${token}` : ""}` : "/console");
   }, [jobId, token]);
-  const openJob = (id: string, tok?: string) => {
+  const open = (id: string, tok?: string) => {
     setJobId(id);
-    setToken(tok ?? "");
-    setTab("Job");
+    const known = tokens();
+    if (tok) {
+      known[id.toLowerCase()] = tok;
+      try {
+        localStorage.setItem("hm-tokens", JSON.stringify(known));
+      } catch {
+        /* private mode */
+      }
+    }
+    setToken(tok ?? known[id.toLowerCase()] ?? "");
   };
+
   return (
     <WalletProvider>
-    <div className="app">
-      <header>
-        <a className="brand" href="/">
-          <svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true" style={{ color: "var(--brass)" }}>
-            <path d="M9 8v16M23 8v16M9 16h14" stroke="currentColor" strokeWidth="2.4" />
-            <rect x="5" y="5" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1" />
-          </svg>
-          Hallmark <span className="sub">console</span>
-        </a>
-        <WalletButton />
-        <nav>
-          {TABS.map((t) => (
-            <button key={t} className={t === tab ? "tab active" : "tab"} onClick={() => setTab(t)}>
-              {t}
-            </button>
-          ))}
-        </nav>
-      </header>
-      {!GATEWAY && <p className="bad banner">Set VITE_GATEWAY_URL to your gateway (packages/web/.env).</p>}
-      <main>
-        {tab === "Try it" && <TryPage onJob={openJob} />}
-        {tab === "Job" && (
-          <>
-            <input className="jobinput mono" placeholder="0x… job id" value={jobId} onChange={(e) => setJobId(e.target.value.trim())} />
-            <JobPage jobId={jobId} token={token} />
-          </>
-        )}
-        {tab === "Network" && <NetworkPage />}
-        {tab === "Core model" && <CoreModelPage />}
-        {tab === "Attack lab" && <AttackPage />}
-        {tab === "Verify" && <VerifyPage jobId={jobId} />}
-      </main>
-      <footer className="small muted">
-        Testnet only · x402 payments on Hedera · shows fidelity to a pinned model, not truth · trust assumptions T1-T6 in the README
-      </footer>
-    </div>
+      <div className="console">
+        <header className="topbar">
+          <a className="brand" href="/">
+            <svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true" style={{ color: "var(--brass)" }}>
+              <path d="M9 8v16M23 8v16M9 16h14" stroke="currentColor" strokeWidth="2.4" />
+              <rect x="5" y="5" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1" />
+            </svg>
+            Hallmark
+          </a>
+          <span className={`net ${GATEWAY ? "" : "bad"}`}>
+            <i className={live ? "on" : ""} />
+            Hedera testnet {live ? "· live" : "· polling"}
+          </span>
+          <div className="push" />
+          <WalletButton />
+        </header>
+        {!GATEWAY && <p className="bad banner">VITE_GATEWAY_URL is not set.</p>}
+        <main className="grid-console">
+          <div className="col-left">
+            <Composer onJob={open} />
+            <DemoDrawer selected={jobId} />
+          </div>
+          <JobView id={jobId} token={token} />
+          <NetworkPanel selected={jobId} onSelect={(id) => open(id)} />
+        </main>
+      </div>
     </WalletProvider>
   );
 }

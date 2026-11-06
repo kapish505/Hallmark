@@ -14,11 +14,11 @@ const HBAR = "0.0.0";
 
 let connector: DAppConnector | null = null;
 
-export async function connectWallet(): Promise<{ signer: DAppSigner; accountId: string }> {
+async function getConnector(): Promise<DAppConnector> {
   if (!WC_PROJECT_ID) throw new Error("VITE_WALLETCONNECT_PROJECT_ID is not set (free project id from cloud.reown.com)");
   if (!connector) {
     connector = new DAppConnector(
-      { name: "Hallmark", description: "Pay-per-request OCR and speech-to-text, checked by sampled re-runs", url: location.origin, icons: [`${location.origin}/favicon.svg`] },
+      { name: "Hallmark", description: "Verified AI inference, paid per request", url: location.origin, icons: [`${location.origin}/favicon.svg`] },
       LedgerId.TESTNET,
       WC_PROJECT_ID,
       Object.values(HederaJsonRpcMethod),
@@ -27,14 +27,97 @@ export async function connectWallet(): Promise<{ signer: DAppSigner; accountId: 
     );
     await connector.init({ logger: "error" });
   }
-  if (!connector.signers.length) await connector.openModal();
-  const signer = connector.signers[0];
+  return connector;
+}
+
+export interface WalletOption {
+  id: string;
+  name: string;
+  kind: "hedera-extension" | "hedera-qr" | "evm";
+  icon?: string;
+}
+
+/** Hedera extensions announce themselves shortly after init; EVM wallets inject window.ethereum. */
+export async function walletOptions(): Promise<WalletOption[]> {
+  const out: WalletOption[] = [];
+  try {
+    const c = await getConnector();
+    await new Promise((r) => setTimeout(r, 700));
+    for (const e of c.extensions.filter((x) => x.available)) out.push({ id: e.id, name: e.name ?? "Hedera wallet", kind: "hedera-extension", icon: e.icon });
+    out.push({ id: "qr", name: "Other Hedera wallet (QR code)", kind: "hedera-qr" });
+  } catch {
+    /* no project id: only the EVM option */
+  }
+  const eth = (window as unknown as { ethereum?: { isMetaMask?: boolean } }).ethereum;
+  if (eth) out.push({ id: "evm", name: eth.isMetaMask ? "MetaMask" : "Browser EVM wallet", kind: "evm" });
+  return out;
+}
+
+export async function connectHedera(opt: WalletOption): Promise<{ signer: DAppSigner; accountId: string }> {
+  const c = await getConnector();
+  if (!c.signers.length) {
+    if (opt.kind === "hedera-extension") await c.connectExtension(opt.id); // opens the extension's popup
+    else await c.openModal();
+  }
+  const signer = c.signers[0];
   if (!signer) throw new Error("wallet did not connect");
   return { signer, accountId: signer.getAccountId().toString() };
 }
 
 export async function disconnectWallet() {
   await connector?.disconnectAll().catch(() => undefined);
+}
+
+/* ------------------------------------------------------------------ EVM wallets (MetaMask) */
+type Eip1193 = { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> };
+const eth = () => (window as unknown as { ethereum?: Eip1193 }).ethereum;
+export const HEDERA_TESTNET = {
+  chainId: "0x128",
+  chainName: "Hedera Testnet",
+  nativeCurrency: { name: "HBAR", symbol: "HBAR", decimals: 18 },
+  rpcUrls: ["https://testnet.hashio.io/api"],
+  blockExplorerUrls: ["https://hashscan.io/testnet"],
+};
+
+/** Connect, then switch to Hedera Testnet, adding the network to the wallet first if it is missing. */
+export async function connectEvm(): Promise<string> {
+  const w = eth();
+  if (!w) throw new Error("no EVM wallet found in this browser");
+  const accounts = (await w.request({ method: "eth_requestAccounts" })) as string[];
+  if (!accounts?.[0]) throw new Error("wallet returned no account");
+  await ensureHederaTestnet();
+  return accounts[0];
+}
+
+export async function ensureHederaTestnet() {
+  const w = eth()!;
+  if (((await w.request({ method: "eth_chainId" })) as string).toLowerCase() === HEDERA_TESTNET.chainId) return;
+  try {
+    await w.request({ method: "wallet_switchEthereumChain", params: [{ chainId: HEDERA_TESTNET.chainId }] });
+  } catch (e) {
+    const code = (e as { code?: number; data?: { originalError?: { code?: number } } }).code ?? (e as { data?: { originalError?: { code?: number } } }).data?.originalError?.code;
+    if (code !== 4902) throw e;
+    await w.request({ method: "wallet_addEthereumChain", params: [HEDERA_TESTNET] });
+  }
+}
+
+/**
+ * Direct-transfer payment for EVM wallets: send the price in HBAR to the gateway's EVM address, wait for
+ * the receipt, then submit the job with the transaction hash. The gateway checks it on the Mirror Node.
+ */
+export async function payDirect(from: string, payToEvm: string, priceTinybar: string, endpoint: string, form: FormData): Promise<{ status: number; body: Record<string, unknown>; tx: string }> {
+  await ensureHederaTestnet();
+  const w = eth()!;
+  const value = "0x" + (BigInt(priceTinybar) * 10_000_000_000n).toString(16); // tinybar -> weibar on the wire
+  const tx = (await w.request({ method: "eth_sendTransaction", params: [{ from, to: payToEvm, value }] })) as string;
+  for (let i = 0; i < 60; i++) {
+    const r = (await w.request({ method: "eth_getTransactionReceipt", params: [tx] })) as { status?: string } | null;
+    if (r?.status === "0x1") break;
+    if (r?.status === "0x0") throw new Error("the HBAR transfer failed");
+    await new Promise((res) => setTimeout(res, 1500));
+  }
+  const res = await fetch(endpoint, { method: "POST", body: form, headers: { "X-Payment-Tx": tx, "ngrok-skip-browser-warning": "1" } });
+  return { status: res.status, body: (await res.json().catch(() => ({}))) as Record<string, unknown>, tx };
 }
 
 const toBase64 = (b: Uint8Array) => {
