@@ -59,7 +59,7 @@ export function NetworkPanel({ selected, onSelect }: { selected: string; onSelec
           {(jobs.data ?? []).map((j) => (
             <li key={j.jobId}>
               <button className={j.jobId === selected ? "is-on" : ""} onClick={() => onSelect(j.jobId)}>
-                <span className={`st st-${j.final ? (j.status === "Refunded" ? "bad" : "ok") : "live"}`} />
+                <span className={`st st-${j.final ? (j.status === "Refunded" || j.status === "Voided" ? "bad" : "ok") : "live"}`} />
                 <span className="feed-task">{j.task === "asr" ? "Speech" : "OCR"}</span>
                 <span className="mono dim">{short(j.jobId)}</span>
                 <span className="feed-status">{j.status === "Challenge" ? "Challenge window" : j.status}</span>

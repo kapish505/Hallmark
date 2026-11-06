@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import type { Manifest as ModelManifest } from "@hallmark/model-spec";
 import { cer, logger, normalize, wer, type NormSpec, type Task } from "@hallmark/shared";
 import type { Db } from "./db.js";
 
@@ -13,6 +14,8 @@ export interface CanaryBuyer {
 export interface CanaryClip {
   id: string;
   task: Task;
+  /** error metric from the model's manifest */
+  metric: "WER" | "CER";
   input: Uint8Array;
   /** human-checked text (normalized with the task's production normalizer) */
   ref: string;
@@ -21,18 +24,20 @@ export interface CanaryClip {
 }
 
 /**
- * Canary set: <dir>/<id>.wav or <id>.png, plus <id>.ref.txt (human-checked) and optionally
+ * Canary set: <dir>/<id><ext> for any served model's input extension (its manifest's input.ext), plus
+ * <id>.ref.txt (human-checked) and optionally
  * <id>.expected.txt (the pinned model's output measured in advance). Rotate the set often: operators
  * who learn canary inputs could game them.
  */
-export function loadCanaries(dir: string): CanaryClip[] {
+export function loadCanaries(dir: string, models: ModelManifest[]): CanaryClip[] {
   if (!dir || !existsSync(dir)) return [];
   const out: CanaryClip[] = [];
   for (const f of readdirSync(dir).sort()) {
-    const m = /^(.+)\.(wav|png)$/i.exec(f);
-    if (!m) continue;
-    const task: Task = m[2].toLowerCase() === "wav" ? "asr" : "ocr";
-    const spec: NormSpec = task === "asr" ? 1 : 2;
+    const m = /^(.+)(\.[a-z0-9]+)$/i.exec(f);
+    const model = m ? models.find((x) => x.input.ext === m[2].toLowerCase()) : undefined;
+    if (!m || !model) continue;
+    const task: Task = model.task;
+    const spec = model.normSpec as NormSpec;
     const refPath = join(dir, `${m[1]}.ref.txt`);
     if (!existsSync(refPath)) continue;
     const expPath = join(dir, `${m[1]}.expected.txt`);
@@ -40,6 +45,7 @@ export function loadCanaries(dir: string): CanaryClip[] {
       out.push({
         id: m[1],
         task,
+        metric: model.accuracy.metric,
         input: new Uint8Array(readFileSync(join(dir, f))),
         ref: normalize(readFileSync(refPath, "utf8"), spec).text,
         expected: existsSync(expPath) ? normalize(readFileSync(expPath, "utf8"), spec).text : null,
@@ -123,7 +129,7 @@ export class CanaryRunner {
       const buyer = await this.d.buyer();
       const r = await buyer.run(clip.task, clip.input);
       const text = r.text ?? "";
-      const error = r.text === null ? 1 : clip.task === "asr" ? wer(clip.ref, text) : cer(clip.ref, text);
+      const error = r.text === null ? 1 : clip.metric === "WER" ? wer(clip.ref, text) : cer(clip.ref, text);
       const matched = clip.expected === null ? null : text === clip.expected;
       const pass = r.text !== null && (matched ?? error <= this.d.cfg.maxError);
       this.d.db.putCanary({ job_id: r.jobId, clip: clip.id, task: clip.task, status: r.status, badge: r.badge, error, matched: matched === null ? null : matched ? 1 : 0, pass: pass ? 1 : 0, cost: price.toString(), at: Date.now() });
@@ -139,15 +145,17 @@ export class CanaryRunner {
     const rows = this.d.db.canaries();
     const by = (t: Task) => {
       const r = rows.filter((x) => x.task === t);
-      const done = r.filter((x) => x.status === "Settled" || x.status === "Refunded");
+      const done = r.filter((x) => x.status === "Settled" || x.status === "Refunded" || x.status === "Voided");
       return {
         runs: r.length,
         passRate: done.length ? done.filter((x) => x.pass).length / done.length : null,
         meanError: done.length ? done.reduce((s, x) => s + x.error, 0) / done.length : null,
-        refunded: done.filter((x) => x.status === "Refunded").length,
+        refunded: done.filter((x) => x.status === "Refunded" || x.status === "Voided").length,
       };
     };
-    return { enabled: this.enabled, clips: this.d.set.length, total: rows.length, asr: by("asr"), ocr: by("ocr"), lastRunAt: rows[0]?.at ?? null, note: "measurement only: canaries never slash anyone" };
+    const byTask = Object.fromEntries([...new Set([...this.d.set.map((c) => c.task), ...rows.map((r) => r.task)])].map((t) => [t, by(t)]));
+    // per-task stats also at the top level (the console reads stats.<task>)
+    return { enabled: this.enabled, clips: this.d.set.length, total: rows.length, byTask, ...byTask, lastRunAt: rows[0]?.at ?? null, note: "measurement only: canaries never slash anyone" };
   }
 }
 

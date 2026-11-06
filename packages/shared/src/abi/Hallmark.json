@@ -66,19 +66,6 @@
   },
   {
     "type": "function",
-    "name": "auditBps",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "auditPool",
     "inputs": [],
     "outputs": [
@@ -86,6 +73,24 @@
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "bondParams",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      },
+      {
+        "name": "",
+        "type": "uint128",
+        "internalType": "uint128"
       }
     ],
     "stateMutability": "view"
@@ -243,6 +248,11 @@
         "name": "modelId",
         "type": "bytes32",
         "internalType": "bytes32"
+      },
+      {
+        "name": "locator",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "outputs": [],
@@ -553,6 +563,21 @@
             "name": "reward",
             "type": "uint128",
             "internalType": "uint128"
+          },
+          {
+            "name": "missingBy",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "finalizedAt",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "executorSlashed",
+            "type": "bool",
+            "internalType": "bool"
           }
         ]
       }
@@ -653,19 +678,6 @@
         "name": "",
         "type": "address",
         "internalType": "contract IHallmarkJudge"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "minBond",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint128",
-        "internalType": "uint128"
       }
     ],
     "stateMutability": "view"
@@ -867,6 +879,19 @@
     "type": "function",
     "name": "renounceOwnership",
     "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "reportInputMissing",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -1365,6 +1390,31 @@
   },
   {
     "type": "event",
+    "name": "InputMissing",
+    "inputs": [
+      {
+        "name": "jobId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "reporter",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "next",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "JobCreated",
     "inputs": [
       {
@@ -1408,6 +1458,12 @@
         "type": "address",
         "indexed": false,
         "internalType": "address"
+      },
+      {
+        "name": "locator",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
       }
     ],
     "anonymous": false

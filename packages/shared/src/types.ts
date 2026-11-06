@@ -1,11 +1,10 @@
 import { z } from "zod";
 
-export const TASKS = ["asr", "ocr"] as const;
-export type Task = (typeof TASKS)[number];
-export const TASK_ENDPOINT: Record<Task, string> = { asr: "/v1/transcribe", ocr: "/v1/ocr" };
+/** a model's client-facing name (its manifest `task`); the list of models comes from the manifests */
+export type Task = string;
 
 export const TaskInfo = z.object({
-  task: z.enum(TASKS),
+  task: z.string(),
   endpoint: z.string(),
   modelId: z.string(),
   modelKey: z.string(),
@@ -15,7 +14,7 @@ export const TaskInfo = z.object({
   tauBps: z.number(),
   auditBps: z.number(),
   available: z.boolean(),
-  /** add-on A2: pinned model's measured error (WER for asr, CER for ocr), informational only */
+  /** add-on A2: pinned model's measured error (metric from its manifest), informational only */
   accuracy: z.object({ expectedErrorBps: z.number(), sampleSize: z.number(), metric: z.enum(["WER", "CER"]), measured: z.boolean() }),
   validators: z.array(z.string()),
   limits: z.object({ maxBytes: z.number(), maxSeconds: z.number().optional(), maxPixels: z.number().optional() }),
@@ -43,7 +42,7 @@ export const JobAccepted = z.object({
   /** bearer capability for the result, the job salt and the evidence (only the payer sees the 202) */
   accessToken: z.string(),
   validator: z.string(),
-  task: z.enum(TASKS),
+  task: z.string(),
   inputHash: z.string(),
   statusUrl: z.string(),
   eventsUrl: z.string(),
@@ -60,6 +59,7 @@ export type Badge =
   | "disputed"
   | "slashed"
   | "refunded"
+  | "voided (input missing)"
   | "audit skipped";
 
 export function badgeFor(j: {
@@ -69,6 +69,7 @@ export function badgeFor(j: {
   slashedWrong: boolean;
 }): Badge {
   if (j.status === "Refunded") return j.slashedWrong ? "slashed" : "refunded";
+  if (j.status === "Voided") return "voided (input missing)";
   if (j.status === "Settled") {
     if (j.auditSkipped) return "audit skipped";
     return j.audited ? "audited (re-run agreed)" : "settled (bond-backed, not audited)";
@@ -89,6 +90,8 @@ export const OperatorBehavior = z.enum([
   "silent",
   "no-reveal",
   "collude",
+  /** executor falsely reports the input missing (spam rule: penalized if the next executor commits) */
+  "report-missing",
 ]);
 export type OperatorBehavior = z.infer<typeof OperatorBehavior>;
 
@@ -113,4 +116,21 @@ export const outputUploadMessage = (u: { jobId: string; operator: string; outCom
  *   X-Hallmark-Address, X-Hallmark-Timestamp (unix s), X-Hallmark-Signature over readMessage(...).
  * Accepted for operators holding a role on the job and for the gateway's listed watchers.
  */
+/**
+ * Direct (non-gateway) job registration with the evidence store, signed by the buyer key BEFORE it calls
+ * Hallmark.createJob itself. Binds the job id, input, salt commitment and model to the buyer address.
+ */
+export const registerMessage = (r: { jobId: string; inputHash: string; saltCommit: string; modelId: string; buyer: string }) =>
+  `hallmark-register:${r.jobId.toLowerCase()}:${r.inputHash.toLowerCase()}:${r.saltCommit.toLowerCase()}:${r.modelId.toLowerCase()}:${r.buyer.toLowerCase()}`;
+export const DirectJobRegistration = z.object({
+  jobId: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
+  modelId: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
+  jobSalt: z.string().regex(/^0x[0-9a-fA-F]{64}$/),
+  buyer: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+  /** base64 input bytes */
+  input: z.string().min(1),
+  signature: z.string(),
+});
+export type DirectJobRegistration = z.infer<typeof DirectJobRegistration>;
+
 export const readMessage = (jobId: string, address: string, ts: number) => `hallmark-read:${jobId.toLowerCase()}:${address.toLowerCase()}:${ts}`;

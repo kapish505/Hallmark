@@ -40,7 +40,7 @@ export interface SettledInfo {
 }
 
 /**
- * x402 middleware for POST /v1/transcribe and /v1/ocr. Flow (G1, read from @x402/express 2.28.0):
+ * x402 middleware for each model's POST endpoint (manifest `endpoint`). Flow (G1, read from @x402/express 2.28.0):
  * verify -> handler runs -> settle only if the handler returned < 400 -> onAfterSettle.
  * The handler's buffered 202 body is in the settle hook's transportContext, so the hook reads
  * the jobId from it and hands off to the pipeline without blocking the response.

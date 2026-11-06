@@ -25,13 +25,14 @@ const STATUS_COPY: Record<string, string> = {
   CommitteeReveal: "Committee is revealing",
   Settled_final: "Settled",
   Refunded: "Refunded",
+  Voided: "Voided: input missing",
 };
 
 
 /** What this job's receipt actually proves, in plain words. Derived only from on-chain state. */
 function Guarantee({ j, ev }: { j: Job; ev: Set<string> }) {
   const slashed = ev.has("Slashed");
-  const refunded = j.status === "Refunded";
+  const refunded = j.status === "Refunded" || j.status === "Voided";
   const bond = j.bond ? tinybarToHbar(j.bond) : "—";
   const model = j.task === "asr" ? "Whisper large-v3 (pinned digest)" : "Tesseract 5 (pinned digest)";
   const rows: Array<{ k: string; v: string; tone: "ok" | "wait" | "bad" | "dim" }> = [
@@ -130,7 +131,7 @@ export function JobView({ id, token }: { id: string; token: string }) {
       </header>
 
       <div className="job-status">
-        <span className={`dot ${j.final ? (j.status === "Refunded" ? "bad" : "ok") : "live"}`} />
+        <span className={`dot ${j.final ? (j.status === "Refunded" || j.status === "Voided" ? "bad" : "ok") : "live"}`} />
         <span>{statusText}</span>
         {left !== null && left > 0 && <span className="mono dim">· {left}s left in this stage</span>}
         <span className="mono dim push">{tinybarToHbar(j.price)}</span>

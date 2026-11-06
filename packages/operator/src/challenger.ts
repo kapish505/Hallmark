@@ -16,8 +16,8 @@ import {
   type NormSpec,
   type WireUnits,
 } from "@hallmark/shared";
+import { byModelId, type Manifest } from "@hallmark/model-spec";
 import type { EvidenceClient } from "./evidence.js";
-import { taskOfSpec } from "./operator.js";
 import type { Worker } from "./worker.js";
 
 /**
@@ -38,6 +38,8 @@ export class Challenger {
       contracts: Contracts;
       sender: TxSender;
       source: LogSource;
+      /** manifests of the models this watcher can re-run */
+      models: Manifest[];
       worker: Worker;
       evidence: EvidenceClient;
       units: WireUnits;
@@ -90,7 +92,9 @@ export class Challenger {
     const jobSalt = await this.d.evidence.salt(jobId);
     if (saltCommitOf(jobSalt).toLowerCase() !== j.saltCommit.toLowerCase()) throw new Error("salt mismatch from gateway");
     const input = await this.d.evidence.input(jobId, j.inputHash);
-    const mine = normalize(await this.d.worker.run(taskOfSpec(j.normSpec), input), j.normSpec as NormSpec).text;
+    const model = byModelId(this.d.models).get(j.modelId.toLowerCase());
+    if (!model) throw new Error(`no manifest for model ${j.modelId}`);
+    const mine = normalize(await this.d.worker.run(model.task, input), j.normSpec as NormSpec).text;
     const core0 = await core.getAddress();
     const chainId = (await core.runner!.provider!.getNetwork()).chainId;
     let reason: string | null = null;

@@ -1,0 +1,50 @@
+{
+  "schema": "hallmark.model/0",
+  "modelKey": "OCR_V1",
+  "task": "ocr",
+  "title": "Image to text",
+  "description": "OCR with Tesseract 5 (best LSTM model), pinned by container digest. PNG with printed ASCII text.",
+  "endpoint": "/v1/ocr",
+  "runtime": {
+    "image": "hallmark-ocr-worker@sha256:087d267003dd23025119faff9d3fa6aa1f5fc52f2e5b0ff90bcfd5d08ffbda82 (local arm64 build of packages/operator/worker/ocr)",
+    "runtimeDigest": "0x087d267003dd23025119faff9d3fa6aa1f5fc52f2e5b0ff90bcfd5d08ffbda82",
+    "hwClass": "0xc7085f55eee3e90bbeef71c5d940a788e962c926541df7ab2572f29305b65938",
+    "hwClassLabel": "laptop arm64 pool (value recorded on chain at deploy; preimage not published)"
+  },
+  "normSpec": 2,
+  "normName": "NORM_OCR_V1B",
+  "checkClass": "EXACT",
+  "tauBps": 0,
+  "feeTinybar": "6000000",
+  "cTinybar": "1151500",
+  "marginTinybar": "2500000",
+  "piBps": 1250,
+  "fpBps": 0,
+  "minWords": 1,
+  "maxWords": 96,
+  "accuracy": { "metric": "CER", "expectedErrorBps": 87, "sampleSize": 8 },
+  "input": {
+    "media": "png",
+    "ext": ".png",
+    "contentType": "image/png",
+    "maxBytes": 2000000,
+    "maxPixels": 4000000,
+    "hint": "PNG, printed ASCII text"
+  },
+  "worker": { "urlEnv": "OCR_WORKER_URL", "path": "/ocr" },
+  "validators": ["none", "min_words:<n>", "date_iso", "amount_present", "invoice_total"],
+  "cheats": {
+    "lazy-small-model": { "worker": { "engine": "fast" } },
+    "lazy-engine": { "worker": { "engine": "fast" } },
+    "truncate": { "worker": { "crop": 0.7 } }
+  },
+  "calibration": {
+    "status": "prelim",
+    "runs": 20,
+    "inputs": 8,
+    "machines": 1,
+    "ranAt": "2026-11-05",
+    "note": "Preliminary G3 run on one machine: honest runs were bit-exact (EXACT class, fp 0). pi is the worst cheat's measured catch rate. More machines and inputs are needed before calling it measured."
+  },
+  "enabled": true
+}

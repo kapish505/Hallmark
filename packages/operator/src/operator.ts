@@ -22,6 +22,7 @@ import {
   type Task,
   type WireUnits,
 } from "@hallmark/shared";
+import { byModelId, type Manifest } from "@hallmark/model-spec";
 import { produceOutput } from "./behaviors.js";
 import { evidenceRef, type EvidenceClient } from "./evidence.js";
 import type { PendingRecord, PendingStore, StateFile } from "./store.js";
@@ -44,13 +45,12 @@ export interface OperatorDeps {
   gasLimit: number;
   gasLimitHeavy: number;
   pollMs: number;
-  lazyModel: string;
+  /** manifests of the models this pool runs (the job's on-chain modelId picks one) */
+  models: Manifest[];
   /** tasks this operator has workers for; jobs for other tasks are left to time out (penalty) */
   tasks: Task[];
   name?: string;
 }
-
-export const taskOfSpec = (spec: number): Task => (spec === 2 ? "ocr" : "asr");
 
 /**
  * Operator loop (section 9.2). One process serves every role it is drawn for:
@@ -61,6 +61,7 @@ export const taskOfSpec = (spec: number): Task => (spec === 2 ? "ocr" : "asr");
  */
 export class Operator {
   private readonly log;
+  private readonly models: Map<string, Manifest>;
   private timer: NodeJS.Timeout | null = null;
   private working = new Set<string>();
   private advancing = new Map<string, Promise<void>>();
@@ -69,6 +70,7 @@ export class Operator {
 
   constructor(private readonly d: OperatorDeps) {
     this.address = d.sender.address;
+    this.models = byModelId(d.models);
     this.log = logger(d.name ?? `operator:${this.address.slice(0, 8)}`);
   }
 
@@ -127,6 +129,7 @@ export class Operator {
     const jobId = e.args.jobId ? String(e.args.jobId) : null;
     if (!jobId) return;
     if (e.name === "JobCreated" && this.me(String(e.args.executor))) void this.take(jobId, Role.Executor);
+    else if (e.name === "InputMissing" && this.me(String(e.args.next))) void this.take(jobId, Role.Executor);
     else if (e.name === "VerifierAssigned" && this.me(String(e.args.verifier))) void this.take(jobId, Role.Verifier);
     else if (e.name === "CommitteeDrawn" && (e.args.members as string[]).some((m) => this.me(String(m)))) void this.take(jobId, Role.Member);
     else if (e.name === "StatusChanged" && this.d.pending.get(jobId)) void this.advance(jobId).catch((err) => this.warn("advance failed", jobId, err));
@@ -145,19 +148,34 @@ export class Operator {
     this.working.add(jobId);
     try {
       const j = await readJob(this.d.contracts.core, jobId);
-      const task = taskOfSpec(j.normSpec);
+      const model = this.models.get(j.modelId.toLowerCase());
+      if (!model) {
+        this.log.error("drawn for a model with no manifest on this host; not serving it", { jobId, modelId: j.modelId });
+        return;
+      }
+      const task = model.task;
       if (!this.d.tasks.includes(task)) {
         this.log.error(`drawn for a ${task} job but no ${task} worker is configured`, { jobId });
         return;
       }
       const behavior = this.d.behavior(role, jobId);
+      if (behavior === "report-missing" && role === Role.Executor) return void (await this.reportMissing(jobId, "behavior=report-missing (false claim)"));
       // add-on A1 / edge case 29: the gateway cannot hand different salts to different operators
-      const jobSalt = await this.d.evidence.salt(jobId);
-      if (saltCommitOf(jobSalt).toLowerCase() !== j.saltCommit.toLowerCase()) {
-        this.log.error("job salt does not match the on-chain saltCommit; refusing the job", { jobId, role });
+      const jobSalt = await this.d.evidence.salt(jobId).catch(() => null);
+      if (!jobSalt || saltCommitOf(jobSalt).toLowerCase() !== j.saltCommit.toLowerCase()) {
+        this.log.error("job salt missing or not matching the on-chain saltCommit; refusing the job", { jobId, role });
+        if (role === Role.Executor) await this.reportMissing(jobId, "salt missing or wrong");
         return;
       }
-      const input = await this.d.evidence.input(jobId, j.inputHash); // throws on hash mismatch (edge case 22)
+      // throws on hash mismatch (edge case 22)
+      const input = await this.d.evidence.input(jobId, j.inputHash).catch((e) => {
+        this.log.error("input not available from the evidence store", { jobId, role, error: String(e) });
+        return null;
+      });
+      if (!input) {
+        if (role === Role.Executor) await this.reportMissing(jobId, "input missing or wrong hash");
+        return;
+      }
       const lastKey = `lastHonest:${task}`;
       const last = this.d.state.get(lastKey);
       const other = last ? (JSON.parse(last) as { inputHash: string; output: string }) : null;
@@ -171,7 +189,7 @@ export class Operator {
             spec: j.normSpec as NormSpec,
             input,
             otherOutput: other && other.inputHash !== j.inputHash ? other.output : null,
-            lazyModel: this.d.lazyModel,
+            cheats: model.cheats,
           },
           this.d.worker,
         );
@@ -202,6 +220,21 @@ export class Operator {
       this.warn("job failed", jobId, e);
     } finally {
       this.working.delete(jobId);
+    }
+  }
+
+  /**
+   * Spam rule: the drawn executor could not get a usable input. Once per job; a second executor is drawn.
+   * If that one commits, this report is penalized as a no-show; if it also reports, the job is voided.
+   */
+  private async reportMissing(jobId: string, why: string) {
+    const j = await readJob(this.d.contracts.core, jobId);
+    if (j.status !== Status.Assigned || !this.me(j.executor)) return;
+    try {
+      const r = await this.d.sender.send(this.d.contracts.core, "reportInputMissing", [jobId], { gasLimit: this.d.gasLimitHeavy, label: "reportInputMissing" });
+      this.log.warn("reported the input missing", { jobId, why, tx: r.hash });
+    } catch (e) {
+      this.warn("reportInputMissing failed", jobId, e);
     }
   }
 

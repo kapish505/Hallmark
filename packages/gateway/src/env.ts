@@ -4,7 +4,7 @@ import { ChainEnv, DEFAULTS, zEnv } from "@hallmark/shared";
 export const GatewayEnv = ChainEnv.extend({
   PORT: z.coerce.number().int().default(8787),
   PUBLIC_URL: z.string().url().default("http://localhost:8787"),
-  /** gateway EVM key: calls createJob (only the gateway may) and runs the keeper */
+  /** gateway EVM key: calls createJob for x402 payers (it may name the payer as buyer) and runs the keeper */
   GATEWAY_PRIVATE_KEY: zEnv.hex32,
   /** gateway Hedera account (x402 payTo, refund sender). Optional only for local EVM runs. */
   GATEWAY_ACCOUNT_ID: zEnv.accountId.optional(),
@@ -14,10 +14,6 @@ export const GatewayEnv = ChainEnv.extend({
   PRICE_REFRESH_MS: z.coerce.number().int().default(60_000),
   DB_PATH: z.string().default("./data/gateway.sqlite"),
   BLOB_DIR: z.string().default("./data/blobs"),
-  MAX_AUDIO_SECONDS: z.coerce.number().default(15),
-  MAX_AUDIO_BYTES: z.coerce.number().int().default(1_000_000),
-  MAX_IMAGE_BYTES: z.coerce.number().int().default(2_000_000),
-  MAX_IMAGE_PIXELS: z.coerce.number().int().default(4_000_000),
   KEEPER: z
     .string()
     .optional()

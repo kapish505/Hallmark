@@ -8,7 +8,6 @@ import {
   makeLogSource,
   MirrorNode,
   modelIdOf,
-  TASK_ENDPOINT,
   TxSender,
   wireUnitsForChain,
   type Contracts,
@@ -18,6 +17,7 @@ import {
   rpcUrls,
 } from "@hallmark/shared";
 import { HallmarkAgent } from "@hallmark/buyer-agent";
+import { modelIdOfKey, selectManifests, type Manifest as ModelManifest } from "@hallmark/model-spec";
 import { createApp, type TaskConfig } from "./app.js";
 import { CanaryRunner, loadCanaries, type CanaryBuyer } from "./canary.js";
 import { DemoController } from "./demo.js";
@@ -32,19 +32,23 @@ import { buildPaymentMiddleware } from "./x402.js";
 
 const log = logger("gateway");
 
-/** Read each task's model and quote from the contracts. Prices are never configured by hand. */
-export async function loadTasks(contracts: Contracts, keys: Record<Task, string>): Promise<TaskConfig[]> {
+/**
+ * Read each served model's registry entry and quote from the contracts. Prices are never configured by
+ * hand: the manifest says which models and how to take their input; the chain says what they cost.
+ */
+export async function loadTasks(contracts: Contracts, manifests: ModelManifest[]): Promise<TaskConfig[]> {
   const out: TaskConfig[] = [];
   const auditBps = Number((await contracts.core.getParams()).auditBps);
-  for (const task of ["asr", "ocr"] as Task[]) {
-    if (!keys[task]) continue;
-    const modelId = modelIdOf(keys[task]);
+  for (const manifest of manifests) {
+    const task = manifest.task;
+    const modelId = modelIdOfKey(manifest.modelKey);
     const m = await contracts.registry.get(modelId);
     if (BigInt(m.fee) === 0n) continue; // not registered
     const [price, bond, , available] = await contracts.core.quote(modelId);
     out.push({
       task,
-      modelKey: keys[task],
+      manifest,
+      modelKey: manifest.modelKey,
       modelId,
       priceTinybar: BigInt(price),
       bondTinybar: BigInt(bond),
@@ -60,10 +64,6 @@ export async function loadTasks(contracts: Contracts, keys: Record<Task, string>
   return out;
 }
 
-const DESCRIPTION: Record<Task, string> = {
-  asr: "Hallmark speech-to-text (Whisper large-v3, pinned; 16 kHz mono WAV, <= 15 s). Bond-backed, sampled re-run; a failed check refunds you.",
-  ocr: "Hallmark OCR (pinned engine; PNG, ASCII text). Bond-backed, sampled re-run; a failed check refunds you.",
-};
 
 /** Wire every gateway component. Tests and the local e2e inject the facilitator/refunder. */
 export async function buildGateway(
@@ -77,8 +77,8 @@ export async function buildGateway(
   const units = wireUnitsForChain(env.CHAIN_ID);
   const db = new Db(env.DB_PATH);
   const mirror = env.LOG_SOURCE === "mirror" ? new MirrorNode(env.MIRROR_NODE_URL) : null;
-  const keys: Record<Task, string> = { asr: env.ASR_MODEL_KEY, ocr: env.OCR_MODEL_KEY };
-  const tasks = await loadTasks(contracts, keys);
+  const manifests = selectManifests(env.MODELS_DIR, env.MODELS);
+  const tasks = await loadTasks(contracts, manifests);
   log.info("tasks", Object.fromEntries(tasks.map((t) => [t.task, { price: formatHbar(t.priceTinybar), bond: formatHbar(t.bondTinybar), available: t.available }])));
 
   const blobs = new BlobStore(env.BLOB_DIR);
@@ -100,13 +100,14 @@ export async function buildGateway(
     mirror,
     units,
     gasLimitHeavy: env.GAS_LIMIT_HEAVY,
+    locator: env.PUBLIC_URL,
     verifySettlement: env.VERIFY_SETTLEMENT && mirror !== null,
   });
   const makeMiddleware = () =>
     buildPaymentMiddleware({
       facilitator: o.facilitator,
       payTo,
-      routes: tasks.filter((t) => t.available).map((t) => ({ path: TASK_ENDPOINT[t.task], priceTinybar: t.priceTinybar, description: DESCRIPTION[t.task] })),
+      routes: tasks.filter((t) => t.available).map((t) => ({ path: t.manifest.endpoint, priceTinybar: t.priceTinybar, description: `Hallmark ${t.manifest.description} Bond-backed, sampled re-run; a failed check refunds you.` })),
       onSettled: (s) => pipeline.onSettled(s.jobId, s.payer, s.transaction),
     });
   let current = makeMiddleware();
@@ -122,7 +123,7 @@ export async function buildGateway(
   let canaryBuyer: CanaryBuyer | null = null;
   const canary = new CanaryRunner({
     db,
-    set: env.CANARY_ACCOUNT_ID && env.CANARY_PRIVATE_KEY ? loadCanaries(env.CANARY_DIR) : [],
+    set: env.CANARY_ACCOUNT_ID && env.CANARY_PRIVATE_KEY ? loadCanaries(env.CANARY_DIR, manifests) : [],
     price: (t) => tasks.find((x) => x.task === t && x.available)?.priceTinybar ?? null,
     cfg: { perDay: env.CANARY_PER_DAY, maxSpendPerDayTinybar: BigInt(env.CANARY_MAX_SPEND_PER_DAY_TINYBAR), noRepeat: 10, maxError: env.CANARY_MAX_ERROR },
     buyer: async () => {
@@ -168,6 +169,7 @@ export async function buildGateway(
     blobs,
     paymentMiddleware,
     tasks: () => tasks,
+    manifests,
     canary,
     demo,
     direct: mirror
@@ -185,10 +187,6 @@ export async function buildGateway(
       chainId: env.CHAIN_ID,
       hashscanUrl: env.HASHSCAN_URL,
       facilitatorUrl: o.facilitatorUrl,
-      maxAudioSeconds: env.MAX_AUDIO_SECONDS,
-      maxAudioBytes: env.MAX_AUDIO_BYTES,
-      maxImageBytes: env.MAX_IMAGE_BYTES,
-      maxImagePixels: env.MAX_IMAGE_PIXELS,
       rateLimitPerMin: env.RATE_LIMIT_PER_MIN,
       contract: env.HALLMARK_ADDRESS,
       demoMode: env.DEMO_MODE,
@@ -203,7 +201,7 @@ export async function buildGateway(
 
   /** Reload quotes; rebuild the x402 routes when a price or availability changed. */
   async function refreshPrices() {
-    const fresh = await loadTasks(contracts, keys);
+    const fresh = await loadTasks(contracts, manifests);
     const ser = (x: TaskConfig[]) => JSON.stringify(x, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
     if (ser(fresh) === ser(tasks)) return false;
     tasks.splice(0, tasks.length, ...fresh);

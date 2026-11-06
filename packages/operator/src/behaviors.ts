@@ -24,8 +24,8 @@ export interface OutputContext {
   input: Uint8Array;
   /** an honest output this operator produced for a DIFFERENT input (replay cheat) */
   otherOutput: string | null;
-  /** ASR model the lazy-small-model cheat uses */
-  lazyModel: string;
+  /** the model manifest's demo cheats: worker options and/or post-processing per behavior */
+  cheats: Record<string, { worker?: Record<string, string | number>; keepWords?: number }>;
 }
 
 /**
@@ -49,18 +49,21 @@ async function produceText(b: OperatorBehavior, ctx: OutputContext, w: Worker): 
   const norm = (raw: string) => normalize(raw, ctx.spec).text;
   switch (b) {
     case "honest":
+    case "report-missing": // only the executor seat files the false claim; other seats run honestly
     case "no-reveal": {
       const raw = await w.run(ctx.task, ctx.input);
       return { text: norm(raw), raw };
     }
     case "lazy-small-model":
-      return norm(ctx.task === "asr" ? await w.run("asr", ctx.input, { model: ctx.lazyModel }) : await w.run("ocr", ctx.input, { engine: "fast" }));
     case "lazy-engine":
-      return norm(ctx.task === "ocr" ? await w.run("ocr", ctx.input, { engine: "fast" }) : await w.run("asr", ctx.input, { model: ctx.lazyModel }));
     case "truncate": {
-      if (ctx.task === "ocr") return norm(await w.run("ocr", ctx.input, { crop: 0.7 }));
-      const words = norm(await w.run("asr", ctx.input)).split(" ");
-      return words.slice(0, Math.max(1, Math.floor(words.length * 0.6))).join(" ");
+      // the model's manifest says what this cheat means for it (a smaller model, a crop, dropping words)
+      const c = ctx.cheats[b];
+      if (!c) throw new Error(`the ${ctx.task} manifest defines no "${b}" cheat`);
+      const text = norm(await w.run(ctx.task, ctx.input, c.worker ?? {}));
+      if (c.keepWords === undefined) return text;
+      const words = text.split(" ");
+      return words.slice(0, Math.max(1, Math.floor(words.length * c.keepWords))).join(" ");
     }
     case "garbage":
       return wordsFrom(hexlify(randomBytes(32)), 12);

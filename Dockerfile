@@ -6,6 +6,7 @@ WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json tsconfig.json ./
 COPY packages ./packages
 COPY scripts ./scripts
+COPY models ./models
 RUN pnpm install --frozen-lockfile --filter "!@hallmark/web"
 ENV NODE_ENV=production
 # e.g. command: ["npx", "tsx", "packages/gateway/src/main.ts"]

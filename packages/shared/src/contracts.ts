@@ -2,6 +2,7 @@ import { AbiCoder, Contract, Interface, keccak256, type ContractRunner } from "e
 import HallmarkAbi from "./abi/Hallmark.json" with { type: "json" };
 import JudgeAbi from "./abi/HallmarkJudge.json" with { type: "json" };
 import RegistryAbi from "./abi/ModelRegistry.json" with { type: "json" };
+import VerdictAbi from "./abi/HallmarkVerdict.json" with { type: "json" };
 import ProbeAbi from "./abi/Probe.json" with { type: "json" };
 import ProbeWrapperAbi from "./abi/ProbeWrapper.json" with { type: "json" };
 
@@ -9,6 +10,7 @@ export const abis = {
   Hallmark: HallmarkAbi,
   HallmarkJudge: JudgeAbi,
   ModelRegistry: RegistryAbi,
+  HallmarkVerdict: VerdictAbi,
   Probe: ProbeAbi,
   ProbeWrapper: ProbeWrapperAbi,
 } as const;
@@ -17,6 +19,7 @@ export const ifaces = {
   core: new Interface(HallmarkAbi),
   judge: new Interface(JudgeAbi),
   registry: new Interface(RegistryAbi),
+  verdict: new Interface(VerdictAbi),
 };
 
 /** Mirrors Hallmark.Status */
@@ -32,9 +35,23 @@ export enum Status {
   CommitteeReveal = 8,
   Settled = 9,
   Refunded = 10,
+  /** both drawn executors reported the input missing: refunded minus the void fee */
+  Voided = 11,
 }
 export const statusName = (s: number | bigint) => Status[Number(s)] ?? `Unknown(${s})`;
-export const isTerminal = (s: number | bigint) => Number(s) === Status.Settled || Number(s) === Status.Refunded;
+export const isTerminal = (s: number | bigint) => Number(s) === Status.Settled || Number(s) === Status.Refunded || Number(s) === Status.Voided;
+
+/** Mirrors IHallmarkVerdict.Verdict */
+export enum Verdict {
+  Pending = 0,
+  FinalAudited = 1,
+  FinalUnaudited = 2,
+  ExecutorSlashed = 3,
+  Refunded = 4,
+  Voided = 5,
+  AuditSkipped = 6,
+}
+export const verdictName = (v: number | bigint) => Verdict[Number(v)] ?? `Unknown(${v})`;
 
 export const Role = { Executor: 1, Verifier: 2, Member: 3 } as const;
 export const Outcome = { Agreed: 1, VerifierWrong: 2, ExecutorWrong: 3, BothConsistent: 4, Inconclusive: 5 } as const;
@@ -47,13 +64,15 @@ export const SlashReason = {
   MemberMismatch: 6,
   NoText: 7,
 } as const;
-export const PayKind = { Fee: 1, Verifier: 2, Member: 3, Finder: 4, ChallengeRefund: 5, ChallengeForfeit: 6 } as const;
+export const PayKind = { Fee: 1, Verifier: 2, Member: 3, Finder: 4, ChallengeRefund: 5, ChallengeForfeit: 6, VoidFee: 7 } as const;
 export const ModelClass = { EXACT: 0, TOLERANCE: 1 } as const;
 
 export interface Addresses {
   HALLMARK_ADDRESS: string;
   JUDGE_ADDRESS: string;
   REGISTRY_ADDRESS: string;
+  /** HallmarkVerdict (IHallmarkVerdict view over the core); optional for older deployments */
+  VERDICT_ADDRESS?: string;
 }
 
 export function connect(addrs: Addresses, runner: ContractRunner) {
@@ -61,6 +80,7 @@ export function connect(addrs: Addresses, runner: ContractRunner) {
     core: new Contract(addrs.HALLMARK_ADDRESS, HallmarkAbi, runner),
     judge: new Contract(addrs.JUDGE_ADDRESS, JudgeAbi, runner),
     registry: new Contract(addrs.REGISTRY_ADDRESS, RegistryAbi, runner),
+    verdict: addrs.VERDICT_ADDRESS ? new Contract(addrs.VERDICT_ADDRESS, VerdictAbi, runner) : null,
   };
 }
 export type Contracts = ReturnType<typeof connect>;
@@ -102,7 +122,7 @@ export function outCommitOf(p: { chainId: number | bigint; core: string; jobId: 
 /** saltCommit = keccak256(jobSalt) as stored in the job; operators check it before working. */
 export const saltCommitOf = (jobSalt: string) => keccak256(jobSalt);
 
-/** Model key -> on-chain model id (keccak256 of the UTF-8 key, e.g. "ASR_V1"). */
+/** Model key (a manifest's modelKey) -> on-chain model id (keccak256 of the UTF-8 key). */
 export const modelIdOf = (key: string) => keccak256(new TextEncoder().encode(key));
 
 /** Plain-object view of Hallmark.getJob (bigints kept for amounts). */
@@ -136,6 +156,11 @@ export interface JobView {
   bond: bigint;
   challengeBond: bigint;
   reward: bigint;
+  /** first executor that reported the input missing (zero address if none) */
+  missingBy: string;
+  /** unix seconds when the job became final (0 while open) */
+  finalizedAt: number;
+  executorSlashed: boolean;
 }
 
 export async function readJob(core: Contract, jobId: string): Promise<JobView> {
@@ -170,6 +195,9 @@ export async function readJob(core: Contract, jobId: string): Promise<JobView> {
     bond: BigInt(j.bond),
     challengeBond: BigInt(j.challengeBond),
     reward: BigInt(j.reward),
+    missingBy: j.missingBy,
+    finalizedAt: Number(j.finalizedAt),
+    executorSlashed: j.executorSlashed,
   };
 }
 

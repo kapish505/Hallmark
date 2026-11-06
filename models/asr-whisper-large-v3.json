@@ -1,0 +1,50 @@
+{
+  "schema": "hallmark.model/0",
+  "modelKey": "ASR_V1",
+  "task": "asr",
+  "title": "Speech to text",
+  "description": "Speech to text with Whisper large-v3 (faster-whisper, int8, greedy decoding), pinned by container digest. 16 kHz mono 16-bit WAV, up to 15 s.",
+  "endpoint": "/v1/transcribe",
+  "runtime": {
+    "image": "hallmark-asr-worker@sha256:df010ef9f1f9ba40c2b52f0fe7dae528668d3dbd331805ad3165b604e1ccdcde (local arm64 build of packages/operator/worker/asr)",
+    "runtimeDigest": "0xdf010ef9f1f9ba40c2b52f0fe7dae528668d3dbd331805ad3165b604e1ccdcde",
+    "hwClass": "0xc7085f55eee3e90bbeef71c5d940a788e962c926541df7ab2572f29305b65938",
+    "hwClassLabel": "laptop arm64 pool (value recorded on chain at deploy; preimage not published)"
+  },
+  "normSpec": 1,
+  "normName": "NORM_ASR_V1",
+  "checkClass": "EXACT",
+  "tauBps": 0,
+  "feeTinybar": "10000000",
+  "cTinybar": "4488000",
+  "marginTinybar": "4000000",
+  "piBps": 1250,
+  "fpBps": 0,
+  "minWords": 1,
+  "maxWords": 96,
+  "accuracy": { "metric": "WER", "expectedErrorBps": 659, "sampleSize": 8 },
+  "input": {
+    "media": "wav-pcm16-mono-16k",
+    "ext": ".wav",
+    "contentType": "audio/wav",
+    "maxBytes": 1000000,
+    "maxSeconds": 15,
+    "hint": "WAV, 16 kHz mono 16-bit, up to 15 s"
+  },
+  "worker": { "urlEnv": "ASR_WORKER_URL", "path": "/asr" },
+  "validators": ["none", "min_words:<n>", "date_iso"],
+  "cheats": {
+    "lazy-small-model": { "worker": { "model_name": "tiny" } },
+    "lazy-engine": { "worker": { "model_name": "tiny" } },
+    "truncate": { "keepWords": 0.6 }
+  },
+  "calibration": {
+    "status": "prelim",
+    "runs": 8,
+    "inputs": 8,
+    "machines": 1,
+    "ranAt": "2026-11-05",
+    "note": "Preliminary G3 run on one machine: honest runs were bit-exact (EXACT class, fp 0). pi is the worst cheat's measured catch rate. More machines and inputs are needed before calling it measured."
+  },
+  "enabled": true
+}

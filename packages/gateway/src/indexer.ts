@@ -74,8 +74,19 @@ export class Indexer {
   private project(jobId: string, name: string, a: Record<string, unknown>) {
     const db = this.d.db;
     switch (name) {
-      case "JobCreated":
-        db.update(jobId, { executor: String(a.executor), bond: String(a.bond), payment_status: "Created" });
+      case "JobCreated": {
+        const row = db.job(jobId);
+        if (row?.payment_status === "External" && row.buyer_evm && row.buyer_evm.toLowerCase() !== String(a.buyer).toLowerCase()) {
+          // someone else created this job id on chain: never treat its result as the registrant's
+          db.update(jobId, { executor: String(a.executor), bond: String(a.bond), payment_status: "BuyerMismatch", error: "on-chain buyer differs from the registered buyer" });
+          break;
+        }
+        db.update(jobId, { executor: String(a.executor), bond: String(a.bond), price: String(a.price), payment_status: "Created" });
+        break;
+      }
+      case "InputMissing":
+        // spam rule: a re-drawn executor (next = zero address when the job was voided)
+        if (String(a.next) !== "0x0000000000000000000000000000000000000000") db.update(jobId, { executor: String(a.next) });
         break;
       case "StatusChanged":
         db.update(jobId, { chain_status: statusName(Number(a.status)), deadline: Number(a.deadline) || null });

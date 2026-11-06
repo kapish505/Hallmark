@@ -23,6 +23,8 @@ export class Pipeline {
       mirror: MirrorNode | null;
       units: WireUnits;
       gasLimitHeavy: number;
+      /** evidence-store locator put on chain with each job (this gateway's public URL) */
+      locator?: string;
       /** require the settlement tx to show SUCCESS on the Mirror Node before creating the job */
       verifySettlement: boolean;
       settlementTimeoutMs?: number;
@@ -75,7 +77,7 @@ export class Pipeline {
         const receipt = await this.d.sender.send(
           this.d.contracts.core,
           "createJob",
-          [jobId, buyer, row.input_hash, row.salt_commit, row.model_id],
+          [jobId, buyer, row.input_hash, row.salt_commit, row.model_id, this.d.locator ?? ""],
           { value: toWire(BigInt(row.price), this.d.units), gasLimit: this.d.gasLimitHeavy, label: "createJob" },
         );
         this.d.db.update(jobId, { payment_status: "Created", create_tx: receipt.hash });

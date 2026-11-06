@@ -2,7 +2,7 @@
  * Buyer validators (add-on A3). A FIXED whitelist of pure functions; no buyer-supplied code.
  *   none | min_words:<n> | date_iso | amount_present | invoice_total
  * They run on the executor's raw output text (falling back to the normalized text). They are
- * ADVISORY: the on-chain commitment binds the normalized text (letters, digits and, for OCR, '.'/','
+ * ADVISORY: the on-chain commitment binds the normalized text (letters, digits and, for normalization rule 2, '.'/','
  * between digits), not raw punctuation or layout. A failure never slashes or refunds anybody: a hard
  * input can make the pinned model produce an output that fails the check while the operator was honest.
  * Bounded: inputs over MAX_INPUT bytes return n/a; every scan is a single linear pass (no regex

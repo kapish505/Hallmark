@@ -51,6 +51,24 @@
   },
   {
     "type": "function",
+    "name": "enableModel",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "expectedHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "get",
     "inputs": [
       {
@@ -202,6 +220,226 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "proposal",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ModelRegistry.Model",
+        "components": [
+          {
+            "name": "class",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tauBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "normSpec",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "minWords",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxWords",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "enabled",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "piBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "fpBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "expectedErrorBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "errorSampleSize",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "runtimeDigest",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "hwClass",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "fee",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "cTinybar",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "marginTinybar",
+            "type": "uint128",
+            "internalType": "uint128"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "proposalHash",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "proposeModel",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "m",
+        "type": "tuple",
+        "internalType": "struct ModelRegistry.Model",
+        "components": [
+          {
+            "name": "class",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "tauBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "normSpec",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "minWords",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "maxWords",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "enabled",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "piBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "fpBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "expectedErrorBps",
+            "type": "uint16",
+            "internalType": "uint16"
+          },
+          {
+            "name": "errorSampleSize",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "runtimeDigest",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "hwClass",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "fee",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "cTinybar",
+            "type": "uint128",
+            "internalType": "uint128"
+          },
+          {
+            "name": "marginTinybar",
+            "type": "uint128",
+            "internalType": "uint128"
+          }
+        ]
+      },
+      {
+        "name": "manifestHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "manifestUri",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -457,6 +695,43 @@
   },
   {
     "type": "event",
+    "name": "ModelProposed",
+    "inputs": [
+      {
+        "name": "modelId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "proposer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "proposalHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "manifestHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "manifestUri",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "ModelSet",
     "inputs": [
       {
@@ -599,6 +874,11 @@
   },
   {
     "type": "error",
+    "name": "NoProposal",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "OwnableInvalidOwner",
     "inputs": [
       {
@@ -618,6 +898,11 @@
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "ProposalChanged",
+    "inputs": []
   },
   {
     "type": "error",

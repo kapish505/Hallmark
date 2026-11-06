@@ -14,6 +14,7 @@ new Challenger({
   contracts: w.contracts,
   sender: w.sender,
   source: w.source,
+  models: w.models,
   worker: w.worker,
   evidence: w.evidence,
   units: wireUnitsForChain(env.CHAIN_ID),

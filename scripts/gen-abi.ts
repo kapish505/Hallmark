@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = join(import.meta.dirname, "..");
-const names = ["Hallmark", "HallmarkJudge", "ModelRegistry", "Probe", "ProbeWrapper"];
+const names = ["Hallmark", "HallmarkJudge", "ModelRegistry", "HallmarkVerdict", "Probe", "ProbeWrapper"];
 const outDir = join(root, "packages/shared/src/abi");
 mkdirSync(outDir, { recursive: true });
 

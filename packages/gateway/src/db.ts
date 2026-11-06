@@ -8,7 +8,9 @@ export type PaymentStatus =
   | "Created" // createJob confirmed on chain
   | "RefundPending" // createJob reverted, HAPI refund not yet confirmed (retried)
   | "Rejected" // createJob reverted and the payer was refunded
-  | "SettlementFailed"; // facilitator said success but the Mirror Node shows the transfer failed
+  | "SettlementFailed" // facilitator said success but the Mirror Node shows the transfer failed
+  | "External" // direct job: registered here, the buyer pays the contract itself (no gateway payment)
+  | "BuyerMismatch"; // direct job id was created on chain by a different buyer than the registrant
 
 export interface JobRow {
   job_id: string;

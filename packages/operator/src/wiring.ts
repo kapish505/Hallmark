@@ -1,11 +1,12 @@
 import { Wallet } from "ethers";
-import { connect, ifaces, makeLogSource, makeProvider, rpcUrls, TxSender, type ChainEnv, type Task } from "@hallmark/shared";
+import { selectManifests, workerUrls } from "@hallmark/model-spec";
+import { connect, ifaces, makeLogSource, makeProvider, rpcUrls, TxSender, type ChainEnv } from "@hallmark/shared";
 import { EvidenceClient } from "./evidence.js";
 import { HttpWorker } from "./worker.js";
 
 /** Shared wiring for the operator and challenger processes. */
 export async function wire(
-  env: ChainEnv & { GATEWAY_URL: string; ASR_WORKER_URL?: string; OCR_WORKER_URL?: string },
+  env: ChainEnv & { GATEWAY_URL: string },
   privateKey: string,
   startCursor: string | null,
 ) {
@@ -22,9 +23,9 @@ export async function wire(
     watched: [{ address: env.HALLMARK_ADDRESS, iface: ifaces.core }],
     startCursor: cursor,
   });
-  const urls: Partial<Record<Task, string>> = {};
-  if (env.ASR_WORKER_URL) urls.asr = env.ASR_WORKER_URL;
-  if (env.OCR_WORKER_URL) urls.ocr = env.OCR_WORKER_URL;
+  // models come from manifests; each manifest names the env var that holds its worker URL on this host
+  const models = selectManifests(env.MODELS_DIR, env.MODELS);
+  const urls = workerUrls(models);
   const evidenceBase = env.GATEWAY_URL.replace(/\/$/, "");
   return {
     provider,
@@ -33,7 +34,8 @@ export async function wire(
     sender,
     source,
     worker: new HttpWorker(urls),
-    tasks: Object.keys(urls) as Task[],
+    models,
+    tasks: Object.keys(urls),
     evidence: new EvidenceClient(evidenceBase, wallet),
     evidenceBase,
   };

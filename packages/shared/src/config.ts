@@ -44,9 +44,12 @@ export const ChainEnv = z.object({
   HALLMARK_ADDRESS: address,
   JUDGE_ADDRESS: address,
   REGISTRY_ADDRESS: address,
-  /** model keys registered on chain (id = keccak256(key)); empty = task not offered */
-  ASR_MODEL_KEY: z.string().default("ASR_V1"),
-  OCR_MODEL_KEY: z.string().default("OCR_V1"),
+  /** HallmarkVerdict (IHallmarkVerdict); optional until the core-first deployment */
+  VERDICT_ADDRESS: address.optional(),
+  /** directory of model manifests (default ./models) */
+  MODELS_DIR: z.string().default("models"),
+  /** comma-separated modelKeys to serve; empty = every manifest in MODELS_DIR */
+  MODELS: z.string().default(""),
   /** Explicit gas limits (E29); confirm against G2 measurements. */
   GAS_LIMIT_DEFAULT: z.coerce.number().int().default(1_500_000),
   GAS_LIMIT_HEAVY: z.coerce.number().int().default(6_000_000),

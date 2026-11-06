@@ -3,8 +3,6 @@ import multer from "multer";
 import { hexlify, keccak256, randomBytes, verifyMessage } from "ethers";
 import {
   badgeFor,
-  checkCanonicalWav,
-  checkPng,
   hashscanTx,
   HBAR_ASSET,
   inputHashOf,
@@ -15,6 +13,8 @@ import {
   NormError,
   OperatorBehavior,
   OutputUpload,
+  DirectJobRegistration,
+  registerMessage,
   outCommitOf,
   outputUploadMessage,
   parseValidator,
@@ -22,7 +22,6 @@ import {
   runValidator,
   saltCommitOf,
   ValidatorError,
-  TASK_ENDPOINT,
   validate,
   VERSION,
   X402_NETWORK,
@@ -31,6 +30,7 @@ import {
   type NormSpec,
   type Task,
 } from "@hallmark/shared";
+import { checkInput, limitsOf, type Manifest as ModelManifest } from "@hallmark/model-spec";
 import type { BlobStore } from "./blobs.js";
 import type { Db, JobRow } from "./db.js";
 import type { Indexer } from "./indexer.js";
@@ -41,6 +41,8 @@ const log = logger("gateway");
 
 export interface TaskConfig {
   task: Task;
+  /** the model's manifest (input rules, validators, description); numbers below are read from the chain */
+  manifest: ModelManifest;
   modelKey: string;
   modelId: string;
   priceTinybar: bigint;
@@ -54,10 +56,6 @@ export interface TaskConfig {
   available: boolean;
 }
 
-const VALIDATORS: Record<Task, string[]> = {
-  asr: ["none", "min_words:<n>", "date_iso"],
-  ocr: ["none", "min_words:<n>", "date_iso", "amount_present", "invoice_total"],
-};
 
 export interface AppDeps {
   db: Db;
@@ -67,6 +65,8 @@ export interface AppDeps {
   paymentMiddleware: (req: Request, res: Response, next: NextFunction) => unknown;
   /** the live task list (prices refresh from the contract) */
   tasks: () => TaskConfig[];
+  /** manifests of every model this gateway serves (routes are registered for each at start) */
+  manifests: ModelManifest[];
   canary?: CanaryRunner;
   demo?: DemoController;
   /**
@@ -86,10 +86,6 @@ export interface AppDeps {
     chainId: number;
     hashscanUrl: string;
     facilitatorUrl: string;
-    maxAudioSeconds: number;
-    maxAudioBytes: number;
-    maxImageBytes: number;
-    maxImagePixels: number;
     rateLimitPerMin: number;
     contract: string;
     demoMode: boolean;
@@ -120,7 +116,7 @@ export function createApp(d: AppDeps) {
   app.disable("x-powered-by");
   app.set("trust proxy", true);
   // section 11: paid responses and results must never be cached by a proxy
-  app.use(["/v1/transcribe", "/v1/ocr", "/v1/jobs"], (_req, res, next) => {
+  app.use([...d.manifests.map((m) => m.endpoint), "/v1/direct", "/v1/core/jobs", "/v1/jobs"], (_req, res, next) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Vary", "PAYMENT-SIGNATURE, X-PAYMENT, Accept");
     next();
@@ -150,7 +146,7 @@ export function createApp(d: AppDeps) {
       payToEvm: cfg.payToEvm,
       tasks: d.tasks().map((t) => ({
         task: t.task,
-        endpoint: `${cfg.publicUrl}${TASK_ENDPOINT[t.task]}`,
+        endpoint: `${cfg.publicUrl}${t.manifest.endpoint}`,
         modelId: t.modelId,
         modelKey: t.modelKey,
         priceTinybar: t.priceTinybar.toString(),
@@ -159,12 +155,9 @@ export function createApp(d: AppDeps) {
         tauBps: t.tauBps,
         auditBps: t.auditBps,
         available: t.available,
-        accuracy: { expectedErrorBps: t.expectedErrorBps, sampleSize: t.errorSampleSize, metric: t.task === "asr" ? "WER" : "CER", measured: t.errorSampleSize > 0 },
-        validators: VALIDATORS[t.task],
-        limits:
-          t.task === "asr"
-            ? { maxBytes: cfg.maxAudioBytes, maxSeconds: cfg.maxAudioSeconds }
-            : { maxBytes: cfg.maxImageBytes, maxPixels: cfg.maxImagePixels },
+        accuracy: { expectedErrorBps: t.expectedErrorBps, sampleSize: t.errorSampleSize, metric: t.manifest.accuracy.metric, measured: t.errorSampleSize > 0 },
+        validators: t.manifest.validators,
+        limits: limitsOf(t.manifest),
       })),
       endpoints: {
         job: `${cfg.publicUrl}/v1/jobs/{jobId}`,
@@ -177,12 +170,13 @@ export function createApp(d: AppDeps) {
   app.get("/health", (_req, res) => res.json({ ok: true }));
 
   // ---------------------------------------------------------------- paid endpoints
-  const maxBody = Math.max(cfg.maxAudioBytes, cfg.maxImageBytes);
+  const maxBody = Math.max(1, ...d.manifests.map((m) => m.input.maxBytes));
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: maxBody, files: 1, fields: 4 } });
 
-  for (const task of ["asr", "ocr"] as Task[]) {
-    const path = TASK_ENDPOINT[task];
-    const maxBytes = task === "asr" ? cfg.maxAudioBytes : cfg.maxImageBytes;
+  for (const mf of d.manifests) {
+    const task = mf.task;
+    const path = mf.endpoint;
+    const maxBytes = mf.input.maxBytes;
     // an unoffered task is a 404 BEFORE any payment (the x402 middleware only protects offered routes)
     app.post(path, (_req, res, next) => {
       const t = taskCfg(task);
@@ -207,7 +201,7 @@ export function createApp(d: AppDeps) {
           if (bytes.length > maxBytes) return void res.status(413).json({ error: `input larger than ${maxBytes} bytes` });
           let meta: Record<string, unknown>;
           try {
-            meta = task === "asr" ? { ...checkCanonicalWav(bytes, cfg.maxAudioSeconds) } : { ...checkPng(bytes, cfg.maxImagePixels) };
+            meta = checkInput(mf, bytes);
           } catch (e) {
             return void res.status(415).json({ error: e instanceof MediaError ? e.message : "unreadable input" });
           }
@@ -217,7 +211,7 @@ export function createApp(d: AppDeps) {
           } catch (e) {
             return void res.status(400).json({ error: e instanceof ValidatorError ? e.message : "bad validator" });
           }
-          if (!VALIDATORS[task].some((v) => v.split(":")[0] === validator.name)) return void res.status(400).json({ error: `validator ${validator.name} is not offered for ${task}` });
+          if (!mf.validators.some((v) => v.split(":")[0] === validator.name)) return void res.status(400).json({ error: `validator ${validator.name} is not offered for ${task}` });
           const paymentHeader = req.header("payment-signature") ?? req.header("x-payment");
           if (!paymentHeader) return void res.status(402).json({ error: "missing payment header" });
           const inputHash = inputHashOf(bytes);
@@ -256,15 +250,70 @@ export function createApp(d: AppDeps) {
     );
   }
 
+  // ---------------------------------------------------------------- evidence store for direct (non-gateway) jobs
+  /**
+   * POST /v1/core/jobs: a service that calls Hallmark.createJob ITSELF first puts the input and the job salt
+   * here, signed by its buyer key. No payment passes through the gateway: the service pays the contract.
+   * The store checks the input against the model's media rules (so operators are not handed unusable
+   * input), records the buyer, and returns the locator to pass to createJob plus a bearer token for the
+   * result. Operators then read salt and input exactly as for gateway jobs (signed, seat-checked).
+   */
+  app.post("/v1/core/jobs", rateLimit(cfg.rateLimitPerMin), express.json({ limit: `${Math.ceil((maxBody * 4) / 3) + 4096}b` }), async (req, res) => {
+    const p = DirectJobRegistration.safeParse(req.body);
+    if (!p.success) return void res.status(400).json({ error: "bad registration", issues: p.error.issues.map((i) => i.path.join(".")) });
+    const r = p.data;
+    const t = d.tasks().find((x) => x.modelId.toLowerCase() === r.modelId.toLowerCase());
+    if (!t) return void res.status(404).json({ error: "this evidence store does not serve that model" });
+    const bytes = new Uint8Array(Buffer.from(r.input, "base64"));
+    const maxBytes = t.manifest.input.maxBytes;
+    if (bytes.length === 0 || bytes.length > maxBytes) return void res.status(413).json({ error: `input must be 1..${maxBytes} bytes` });
+    let meta: Record<string, unknown>;
+    try {
+      meta = checkInput(t.manifest, bytes);
+    } catch (e) {
+      return void res.status(415).json({ error: e instanceof MediaError ? e.message : "unreadable input" });
+    }
+    const inputHash = inputHashOf(bytes);
+    const saltCommit = saltCommitOf(r.jobSalt);
+    try {
+      const signer = verifyMessage(registerMessage({ jobId: r.jobId, inputHash, saltCommit, modelId: r.modelId, buyer: r.buyer }), r.signature);
+      if (signer.toLowerCase() !== r.buyer.toLowerCase()) return void res.status(401).json({ error: "signature is not from the buyer" });
+    } catch {
+      return void res.status(401).json({ error: "bad signature" });
+    }
+    const jobId = r.jobId.toLowerCase();
+    const onChain = await d.contracts.core.getJob(jobId);
+    if (Number(onChain.status) !== 0) return void res.status(409).json({ error: "a job with this id already exists on chain; register before createJob" });
+    if (db.job(jobId)) return void res.status(409).json({ error: "job id already registered; pick a fresh random job id" });
+    d.blobs.put(bytes);
+    const row = db.insertPending({
+      jobId,
+      paymentKey: `core:${jobId}`,
+      task: t.task,
+      modelId: t.modelId,
+      inputHash,
+      bytes: bytes.length,
+      meta: { ...meta, direct: true },
+      price: t.priceTinybar,
+      jobSalt: r.jobSalt,
+      saltCommit,
+      accessToken: hexlify(randomBytes(24)),
+      validator: "none",
+    });
+    db.update(jobId, { payment_status: "External", buyer_evm: r.buyer.toLowerCase() });
+    res.status(201).json({ jobId, inputHash, saltCommit, modelId: t.modelId, locator: cfg.publicUrl, accessToken: row.access_token, priceTinybar: t.priceTinybar.toString() });
+  });
+
   /** only the payer receives the 202, so it carries the bearer capability for this job */
   // ---------------------------------------------------------------- direct transfer (EVM wallets)
   /**
-   * POST /v1/direct/{asr|ocr} with header X-Payment-Tx: <EVM tx hash> of a plain HBAR transfer to payToEvm.
+   * POST /v1/direct/{task} with header X-Payment-Tx: <EVM tx hash> of a plain HBAR transfer to payToEvm.
    * The transfer must be SUCCESS on the Mirror Node, pay at least the price, be under 15 minutes old,
    * and not have paid for another job. Agents use x402; this exists for wallets that cannot sign x402.
    */
-  for (const task of ["asr", "ocr"] as Task[]) {
-    const maxBytes = task === "asr" ? cfg.maxAudioBytes : cfg.maxImageBytes;
+  for (const mf of d.manifests) {
+    const task = mf.task;
+    const maxBytes = mf.input.maxBytes;
     app.post(
       `/v1/direct/${task}`,
       rateLimit(cfg.rateLimitPerMin),
@@ -281,7 +330,7 @@ export function createApp(d: AppDeps) {
           if (bytes.length > maxBytes) return void res.status(413).json({ error: `input larger than ${maxBytes} bytes` });
           let meta: Record<string, unknown>;
           try {
-            meta = task === "asr" ? { ...checkCanonicalWav(bytes, cfg.maxAudioSeconds) } : { ...checkPng(bytes, cfg.maxImagePixels) };
+            meta = checkInput(mf, bytes);
           } catch (e) {
             return void res.status(415).json({ error: e instanceof MediaError ? e.message : "unreadable input" });
           }
@@ -399,7 +448,7 @@ export function createApp(d: AppDeps) {
       outcome: r.outcome,
       deadline: r.deadline,
       badge: badgeFor({ status, audited: !!r.audited, auditSkipped: !!r.audit_skipped, slashedWrong: !!r.slashed_wrong }),
-      final: status === "Settled" || status === "Refunded" || r.payment_status === "Rejected",
+      final: status === "Settled" || status === "Refunded" || status === "Voided" || r.payment_status === "Rejected",
       events,
     };
   }
@@ -505,8 +554,8 @@ export function createApp(d: AppDeps) {
     if (w?.kind !== "buyer") return void res.status(403).json({ error: "the result is readable only with the buyer's access token" });
     const v = view(r);
     const t = d.tasks().find((x) => x.task === r.task);
-    const accuracy = t ? { expectedErrorBps: t.expectedErrorBps, sampleSize: t.errorSampleSize, metric: r.task === "asr" ? "WER" : "CER", label: t.errorSampleSize > 0 ? `pinned model, measured error ${(t.expectedErrorBps / 100).toFixed(1)}% on ${t.errorSampleSize} samples` : "pinned model, error rate not measured yet" } : null;
-    if (v.status === "Refunded" || r.payment_status === "Rejected") return void res.status(410).json({ error: "refunded", badge: v.badge, refundLink: v.payment.refundLink });
+    const accuracy = t ? { expectedErrorBps: t.expectedErrorBps, sampleSize: t.errorSampleSize, metric: t.manifest.accuracy.metric, label: t.errorSampleSize > 0 ? `pinned model, measured error ${(t.expectedErrorBps / 100).toFixed(1)}% on ${t.errorSampleSize} samples` : "pinned model, error rate not measured yet" } : null;
+    if (v.status === "Refunded" || v.status === "Voided" || r.payment_status === "Rejected") return void res.status(410).json({ error: "refunded", badge: v.badge, refundLink: v.payment.refundLink });
     if (["Text", "CommitteeCommit", "CommitteeReveal"].includes(v.status)) return void res.status(409).json({ error: "disputed: the committee is re-running this job", badge: v.badge });
     const exec = r.executor ? db.output(r.job_id, r.executor) : null;
     const seat = r.executor ? await d.contracts.core.seat(r.job_id, r.executor).catch(() => null) : null;

@@ -1,0 +1,20 @@
+{
+  "name": "@hallmark/sdk",
+  "version": "0.1.0-alpha.0",
+  "description": "Thin client for the Hallmark core: create a job directly on the contract, read the verdict, fetch and check the result (alpha).",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@hallmark/shared": "workspace:*",
+    "ethers": "6.13.1"
+  },
+  "devDependencies": {
+    "@hallmark/gateway": "workspace:*",
+    "@hallmark/operator": "workspace:*",
+    "@hallmark/model-spec": "workspace:*"
+  }
+}
