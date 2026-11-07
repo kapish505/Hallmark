@@ -16,7 +16,7 @@ it loses part of its bond for not showing up and all of it for a wrong output. T
 
 ```bash
 npm install -g @kapish505/hallmark-operator
-npx hallmark-operator init ./my-operator
+hallmark-operator init ./my-operator
 cd my-operator
 ```
 
@@ -41,7 +41,7 @@ can produce different output and get you penalized as wrong.
 ## Run
 
 ```bash
-npx hallmark-operator run
+hallmark-operator run
 ```
 
 On first start it registers with `STAKE_TINYBAR` (at least the contract's `minStake`). It then follows the
@@ -61,7 +61,7 @@ Restarts are safe: every step is decided from chain state.
 ## Status
 
 ```bash
-npx hallmark-operator status
+hallmark-operator status
 ```
 
 prints whether you are registered, free and locked stake, credits waiting to be withdrawn, pool size and

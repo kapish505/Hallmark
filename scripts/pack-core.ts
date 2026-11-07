@@ -121,7 +121,7 @@ const meta = (dir: string) => {
   pack(d, "model-spec", {
     ...meta("model-spec"),
     exports: { ".": { types: "./dist/index.d.ts", default: "./dist/index.js" } },
-    bin: { "hallmark-calibrate": "./dist/calibrate-cli.js", "hallmark-models": "./dist/models-cli.js" },
+    bin: { "hallmark-calibrate": "dist/calibrate-cli.js", "hallmark-models": "dist/models-cli.js" },
     files: ["dist", "models"],
     dependencies: DEPS,
   });
@@ -144,7 +144,7 @@ const meta = (dir: string) => {
   cpSync(join(ROOT, "models"), join(d, "models"), { recursive: true });
   cpSync(join(ROOT, "packages/contracts/deployments"), join(d, "deployments"), { recursive: true });
   cpSync(join(ROOT, "packages/operator/worker"), join(d, "workers"), { recursive: true });
-  pack(d, "operator", { ...meta("operator"), bin: { "hallmark-operator": "./dist/cli.js" }, files: ["dist", "models", "deployments", "workers"], dependencies: DEPS });
+  pack(d, "operator", { ...meta("operator"), bin: { "hallmark-operator": "dist/cli.js" }, files: ["dist", "models", "deployments", "workers"], dependencies: DEPS });
 }
 rmSync(STAGE, { recursive: true, force: true });
 if (PUBLISH) {

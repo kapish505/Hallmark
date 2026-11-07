@@ -4,6 +4,7 @@ import { CORE, hashscan, JUDGE, REGISTRY, REPO, Shell, VERDICT } from "./Shell";
 const SECTIONS: Array<[string, string]> = [
   ["overview", "Overview"],
   ["quickstart", "Quickstart"],
+  ["packages", "Packages"],
   ["addresses", "Contracts"],
   ["verdicts", "Verdicts"],
   ["direct", "Direct jobs"],
@@ -139,6 +140,45 @@ console.log(v.verdict, (await hm.result(job)).text);`}</Code>
             </p>
           </Sec>
 
+          <Sec id="packages" title="Packages">
+            <p>Four packages on npm, all 0.x alpha. Each one bundles its internal code, so the only npm dependencies are ethers and zod.</p>
+            <div className="doc-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Package</th>
+                    <th>For</th>
+                    <th>Install</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["hallmark-sdk", "Services: create jobs on the contract, read verdicts, check results", "npm i @kapish505/hallmark-sdk ethers"],
+                    ["hallmark-contracts", "ABIs, testnet addresses, IHallmarkVerdict and the Solidity sources", "npm i @kapish505/hallmark-contracts"],
+                    ["hallmark-operator", "Operators: the hallmark-operator CLI (init, run, status)", "npm i -g @kapish505/hallmark-operator"],
+                    ["hallmark-model-spec", "Model authors: manifest schema, hallmark-calibrate, hallmark-models", "npm i -g @kapish505/hallmark-model-spec"],
+                  ].map(([n, f, i]) => (
+                    <tr key={n}>
+                      <td>
+                        <a className="mono" href={`https://www.npmjs.com/package/@kapish505/${n}`} target="_blank" rel="noreferrer">
+                          @kapish505/{n}
+                        </a>
+                      </td>
+                      <td>{f}</td>
+                      <td>
+                        <code>{i}</code>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="dim">
+              Published under the author's npm scope because <code>@hallmark</code> belongs to another account. Inside the repository they are the
+              workspace packages <code>@hallmark/*</code>; <code>scripts/pack-core.ts</code> builds the published ones.
+            </p>
+          </Sec>
+
           <Sec id="addresses" title="Contracts on Hedera testnet (chain 296)">
             <div className="doc-table">
               <table>
@@ -263,10 +303,10 @@ if (v.finalizedAt(jobId) != 0 && v.status(jobId) == IHallmarkVerdict.Verdict.Fin
 
           <Sec id="operator" title="Run an operator">
             <Code lang="bash">{`npm install -g @kapish505/hallmark-operator
-npx hallmark-operator init ./node      # writes .env, docker-compose.yml, models/
+hallmark-operator init ./node          # writes .env, docker-compose.yml, models/
 cd node && docker compose up -d --build
-npx hallmark-operator run               # registers with STAKE_TINYBAR, then serves seats
-npx hallmark-operator status`}</Code>
+hallmark-operator run                   # registers with STAKE_TINYBAR, then serves seats
+hallmark-operator status`}</Code>
             <p>
               Fill <code>OPERATOR_PRIVATE_KEY</code> and <code>GATEWAY_URL</code> in <code>.env</code>. Run the same image digest and hardware class as the
               rest of the pool: an honest run on different hardware can disagree and be penalized. Fees and rewards accrue as credits; withdraw with{" "}
@@ -276,7 +316,8 @@ npx hallmark-operator status`}</Code>
 
           <Sec id="model" title="Add a model">
             <p>A model is a JSON manifest. Adding one means measuring it, not changing code.</p>
-            <Code lang="bash">{`hallmark-calibrate models/my-model.json ./dataset --workers http://a:9000,http://b:9000 --honest-cost-tinybar 4000000
+            <Code lang="bash">{`npm install -g @kapish505/hallmark-model-spec
+hallmark-calibrate models/my-model.json ./dataset --workers http://a:9000,http://b:9000 --honest-cost-tinybar 4000000
 hallmark-models propose models/my-model.calibrated.json      # anyone; stored disabled
 hallmark-models enable  models/my-model.calibrated.json      # registry owner; pinned to the proposal hash`}</Code>
             <p>

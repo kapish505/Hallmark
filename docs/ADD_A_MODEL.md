@@ -45,6 +45,12 @@ Copy a file in `models/` and fill in:
 
 ## 4. Calibrate
 
+The tools come from npm (`hallmark-calibrate` and `hallmark-models`):
+
+```bash
+npm install -g @kapish505/hallmark-model-spec
+```
+
 ```bash
 hallmark-calibrate models/<file>.json <dataset-dir> \
   --workers http://machine-a:9000,http://machine-b:9000 --runs 20 --honest-cost-tinybar <your estimate>
