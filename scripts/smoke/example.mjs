@@ -4,7 +4,7 @@ import { JsonRpcProvider, Wallet } from "ethers";
 import { HallmarkClient } from "@kapish505/hallmark-sdk";
 import { hederaTestnet as c } from "@kapish505/hallmark-contracts";
 
-const signer = new Wallet(process.env.KEY, new JsonRpcProvider("https://testnet.hashio.io/api", 296));
+const signer = new Wallet(process.env.KEY, new JsonRpcProvider(process.env.RPC_URL ?? "https://testnet.hashio.io/api", 296));
 const hm = new HallmarkClient({ signer, contracts: { hallmark: c.HALLMARK_ADDRESS, verdict: c.VERDICT_ADDRESS }, evidenceUrl: process.env.EVIDENCE_URL });
 const job = await hm.createJob({ modelKey: "OCR_V1", input: readFileSync(process.env.INPUT ?? "input.png") });
 const v = await hm.waitForVerdict(job.jobId); // FinalAudited | FinalUnaudited | AuditSkipped | ExecutorSlashed | Refunded | Voided
