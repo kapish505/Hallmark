@@ -29,50 +29,72 @@ const STATUS_COPY: Record<string, string> = {
 };
 
 
-/** What this job's receipt actually proves, in plain words. Derived only from on-chain state. */
-function Guarantee({ j, ev }: { j: Job; ev: Set<string> }) {
-  const slashed = ev.has("Slashed");
+type Ev = Job["events"][number];
+const last = (evs: Ev[], name: string) => [...evs].reverse().find((e) => e.name === name);
+
+/** The audit, stated only as far as it has actually happened on chain. */
+function rerunState(j: Job, evs: Ev[]): { v: string; tone: "ok" | "wait" | "bad" | "dim"; reproduced: boolean } {
+  const resolved = last(evs, "Resolved");
+  const compared = last(evs, "Compared");
+  const drawn = last(evs, "AuditDrawn");
+  if (resolved) {
+    const o = Number(resolved.args.outcome);
+    if (o === 3) return { v: "The re-run disagreed and the committee confirmed the executor was wrong", tone: "bad", reproduced: false };
+    if (o === 2) return { v: "The re-run disagreed, but the committee sided with the executor", tone: "ok", reproduced: true };
+    if (o === 4) return { v: "The committee found both answers consistent with the pinned model", tone: "ok", reproduced: true };
+    return { v: "The committee could not decide; you were refunded and nobody was slashed for being wrong", tone: "dim", reproduced: false };
+  }
+  if (compared) {
+    if (String(compared.args.agree) === "true") return { v: "An independent operator re-ran it blind and got the same answer", tone: "ok", reproduced: true };
+    return { v: "The re-run disagreed; a committee is re-running it now", tone: "wait", reproduced: false };
+  }
+  if (j.auditSkipped) return { v: "Drawn for a re-run, but no verifier showed up (penalized). Not checked", tone: "dim", reproduced: false };
+  if (evs.some((e) => e.name === "VerifierAssigned")) return { v: "Drawn for a re-run: a second operator is re-running it blind (not compared yet)", tone: "wait", reproduced: false };
+  if (drawn)
+    return String(drawn.args.audited) === "true"
+      ? { v: "Drawn for a re-run; waiting for a verifier", tone: "wait", reproduced: false }
+      : { v: "Not drawn for a re-run this time. Open to challenge until it settles", tone: "dim", reproduced: false };
+  return { v: "The random re-run draw happens after the executor commits", tone: "wait", reproduced: false };
+}
+
+/** What this receipt proves, in plain words. Every line follows on-chain events that already happened. */
+function Guarantee({ j }: { j: Job }) {
+  const evs = j.events;
+  const ev = new Set(evs.map((e) => e.name));
+  const slashedWrong = evs.some((e) => e.name === "Slashed" && String(e.args.reason) === "4" && String(e.args.who).toLowerCase() === (j.executor ?? "").toLowerCase());
   const refunded = j.status === "Refunded" || j.status === "Voided";
   const bond = j.bond ? tinybarToHbar(j.bond) : "—";
-  const model = j.task === "asr" ? "Whisper large-v3 (pinned digest)" : "Tesseract 5 (pinned digest)";
+  const rr = rerunState(j, evs);
   const rows: Array<{ k: string; v: string; tone: "ok" | "wait" | "bad" | "dim" }> = [
     { k: "Paid", v: j.payment.settleTx ? "Settled on Hedera" : "Waiting for settlement", tone: j.payment.settleTx ? "ok" : "wait" },
     {
       k: "Committed",
-      v: ev.has("Committed") ? `Executor sealed its answer from ${model}` : "Executor has not committed yet",
+      v: ev.has("Committed") ? "The executor sealed its answer from the pinned model" : "The executor has not committed yet",
       tone: ev.has("Committed") ? "ok" : "wait",
     },
-    {
-      k: "Re-run",
-      v: j.audited
-        ? slashed
-          ? "An independent operator disagreed, and the committee confirmed it"
-          : "An independent operator re-ran it blind and got the same answer"
-        : j.auditSkipped
-          ? "Drawn for audit, but no verifier showed up (penalized)"
-          : ev.has("AuditDrawn")
-            ? "Not drawn for re-run this time. It stays open to challenge until it settles"
-            : "Random audit draw pending",
-      tone: j.audited ? (slashed ? "bad" : "ok") : ev.has("AuditDrawn") || j.auditSkipped ? "dim" : "wait",
-    },
+    { k: "Re-run", v: rr.v, tone: rr.tone },
     {
       k: "At stake",
-      v: slashed ? "Executor's bond slashed" : `${bond} operator bond, lost if the answer is proven wrong`,
-      tone: slashed ? "bad" : "ok",
+      v: slashedWrong ? "The executor's bond was slashed" : `${bond} operator bond, lost if the answer is proven wrong`,
+      tone: slashedWrong ? "bad" : ev.has("JobCreated") ? "ok" : "wait",
     },
     {
       k: "Recourse",
-      v: refunded ? "You were refunded in full" : j.final ? "Settled: no dispute succeeded" : "Full refund if the answer is proven wrong",
-      tone: refunded ? "ok" : j.final ? "ok" : "wait",
+      v: refunded ? "You were refunded" : j.final ? "Settled: no dispute succeeded" : "Full refund if the answer is proven wrong",
+      tone: refunded || j.final ? "ok" : "wait",
     },
   ];
   const headline = refunded
     ? "This answer did not hold up. You got your money back."
-    : j.audited && !slashed
+    : rr.reproduced && j.final
       ? "Reproduced by an independent operator."
-      : j.final
-        ? "Bond-backed and unchallenged."
-        : "Being checked.";
+      : rr.reproduced
+        ? "Reproduced by an independent operator; settling."
+        : j.final
+          ? j.auditSkipped
+            ? "Bond-backed. The re-run did not happen."
+            : "Bond-backed and unchallenged. Not re-run."
+          : "Being checked.";
   return (
     <div className="guarantee">
       <div className="g-head">
@@ -92,6 +114,37 @@ function Guarantee({ j, ev }: { j: Job; ev: Set<string> }) {
     </div>
   );
 }
+
+/** consensus time of an event (Mirror Node position "seconds.nanos"), or null on other chains */
+const tsOf = (e: Ev) => (/^\d+\.\d+$/.test(e.position ?? "") ? Number(e.position) : null);
+const actorOf = (e: Ev): [string, string] | null => {
+  const a = e.args as Record<string, unknown>;
+  if (e.name === "JobCreated") return ["buyer", String(a.buyer)];
+  if (e.name === "Paid") return ["to", String(a.to)];
+  if (e.name === "VerifierAssigned") return ["verifier", String(a.verifier)];
+  if (e.name === "Challenged") return ["challenger", String(a.challenger)];
+  if (e.name === "InputMissing") return ["reporter", String(a.reporter)];
+  if (e.name === "JobRefunded") return ["buyer", String(a.buyer)];
+  if (a.who) return ["by", String(a.who)];
+  return null;
+};
+const EVENT_COPY: Record<string, string> = {
+  JobCreated: "Job created, executor drawn",
+  Committed: "Answer sealed",
+  AuditDrawn: "Re-run draw",
+  VerifierAssigned: "Verifier drawn",
+  Revealed: "Answer revealed",
+  Compared: "Answers compared",
+  TextPosted: "Text posted",
+  CommitteeDrawn: "Committee drawn",
+  Resolved: "Committee decided",
+  Challenged: "Challenged",
+  Slashed: "Slashed",
+  Paid: "Paid",
+  JobSettled: "Settled",
+  JobRefunded: "Refunded",
+  InputMissing: "Input reported missing",
+};
 
 export function JobView({ id, token }: { id: string; token: string }) {
   const q = useJob(id);
@@ -117,6 +170,9 @@ export function JobView({ id, token }: { id: string; token: string }) {
 
   const j = q.data;
   const ev = new Set(j.events.map((e) => e.name));
+  const times = j.events.map(tsOf).filter((x): x is number => x !== null);
+  const t0 = times.length ? Math.min(...times) : null;
+  const tEnd = times.length ? Math.max(...times) : null;
   const current = STEPS.findIndex((s) => !s.done(j, ev));
   const statusText = j.status === "Settled" ? "Settled" : (STATUS_COPY[j.status] ?? j.status);
 
@@ -134,6 +190,7 @@ export function JobView({ id, token }: { id: string; token: string }) {
         <span className={`dot ${j.final ? (j.status === "Refunded" || j.status === "Voided" ? "bad" : "ok") : "live"}`} />
         <span>{statusText}</span>
         {left !== null && left > 0 && <span className="mono dim">· {left}s left in this stage</span>}
+        {j.final && t0 !== null && tEnd !== null && <span className="mono dim">· final {Math.round(tEnd - t0)}s after creation</span>}
         <span className="mono dim push">{tinybarToHbar(j.price)}</span>
       </div>
 
@@ -146,7 +203,7 @@ export function JobView({ id, token }: { id: string; token: string }) {
         ))}
       </ol>
 
-      <Guarantee j={j} ev={ev} />
+      <Guarantee j={j} />
 
       <div className="result">
         <div className="result-head">
@@ -201,20 +258,39 @@ export function JobView({ id, token }: { id: string; token: string }) {
           {j.payment.settleLink && (
             <li><span>Payment settled</span><a href={j.payment.settleLink} target="_blank" rel="noreferrer">HashScan</a></li>
           )}
-          {j.events.filter((e) => e.name !== "StatusChanged").map((e, i) => (
-            <li key={i}>
-              <span>
-                {e.name}
-                {e.name === "Slashed" && <em className="bad"> {SLASH_REASON[String(e.args.reason)]} · {tinybarToHbar(String(e.args.amount))}</em>}
-              </span>
-              {e.link && <a href={e.link} target="_blank" rel="noreferrer">HashScan</a>}
-            </li>
-          ))}
+          {j.events.filter((e) => e.name !== "StatusChanged").map((e, i) => {
+            const ts = tsOf(e);
+            const actor = actorOf(e);
+            return (
+              <li key={i}>
+                <span className="ev-time mono dim">
+                  {ts !== null ? new Date(ts * 1000).toLocaleTimeString([], { hour12: false }) : "—"}
+                  {ts !== null && t0 !== null && <small> +{(ts - t0).toFixed(1)}s</small>}
+                </span>
+                <span className="ev-name">
+                  {EVENT_COPY[e.name] ?? e.name}
+                  {e.name === "AuditDrawn" && <em className="dim"> → {String(e.args.audited) === "true" ? "drawn for re-run" : "not drawn"}</em>}
+                  {e.name === "Compared" && <em className={String(e.args.agree) === "true" ? "ok" : "bad"}> {String(e.args.agree) === "true" ? "agree" : "differ"}</em>}
+                  {e.name === "Slashed" && <em className="bad"> {SLASH_REASON[String(e.args.reason)]} · {tinybarToHbar(String(e.args.amount))}</em>}
+                  {e.name === "Paid" && <em className="dim"> {tinybarToHbar(String(e.args.amount))}</em>}
+                </span>
+                <span className="ev-actor mono dim">{actor ? `${actor[0]} ${short(actor[1])}` : ""}</span>
+                {e.link ? <a href={e.link} target="_blank" rel="noreferrer">HashScan</a> : <span />}
+              </li>
+            );
+          })}
           {j.payment.refundLink && <li><span>Refund</span><a href={j.payment.refundLink} target="_blank" rel="noreferrer">HashScan</a></li>}
         </ul>
       </div>
 
-      <p className="verify-line mono dim">Verify independently: pnpm verify {short(j.jobId)}{token ? " --token …" : ""}</p>
+      <div className="verify-line">
+        <span className="eyebrow-sm">Verify it yourself</span>
+        <code className="mono">pnpm verify {j.jobId}</code>
+        <p className="dim small">
+          Re-derives the draw, the commitments, the comparison and the payout from public Hedera data alone: no token, no trust in this gateway.
+          The buyer can add <code>--token</code> (the private result key from the payment) to also check the delivered text against the commitment.
+        </p>
+      </div>
     </section>
   );
 }

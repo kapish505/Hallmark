@@ -44,7 +44,8 @@
     "inputs": 8,
     "machines": 1,
     "ranAt": "2026-11-05",
-    "note": "Preliminary G3 run on one machine: honest runs were bit-exact (EXACT class, fp 0). pi is the worst cheat's measured catch rate. More machines and inputs are needed before calling it measured."
+    "note": "Preliminary G3 run on one machine: honest runs were bit-exact (EXACT class, fp 0). pi is the worst cheat's measured catch rate. More machines and inputs are needed before calling it measured.",
+    "cheatsPiBps": { "empty": 10000, "garbage": 10000, "replay-other-input": 10000, "truncate": 8750, "lazy-small-model": 1250, "lazy-engine": 1250, "downscale-50pct": 1250 }
   },
   "enabled": true
 }

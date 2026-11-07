@@ -107,6 +107,7 @@ export function calibrate(base: Manifest, d: CalibrationInput): CalibrationResul
       machines: d.machines ?? 1,
       ranAt: new Date().toISOString(),
       note: `hallmark-calibrate: ${comparisons} honest pairs, ${((exact / comparisons) * 100).toFixed(2)}% bit-exact; worst cheat ${worst.name}`,
+      cheatsPiBps: Object.fromEntries(perCheat.map((c) => [c.name, c.piBps])),
     },
     enabled: false,
   };

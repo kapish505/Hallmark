@@ -64,6 +64,26 @@ export function App() {
           <JobView id={jobId} token={token} />
           <NetworkPanel selected={jobId} onSelect={(id) => open(id)} />
         </main>
+        <footer className="console-foot">
+          {[
+            ["Hallmark", "0x4Ae8e841fD17c70F9E1628e4a0121944288c46CE"],
+            ["HallmarkVerdict", "0x16E332bC16DB931e65cF14e28E57E80f18897be2"],
+            ["ModelRegistry", "0x5902c6e3020297B6Bf47bFf050357Df9108a234f"],
+          ].map(([n, a]) => (
+            <a key={n} href={`https://hashscan.io/testnet/contract/${a}`} target="_blank" rel="noreferrer">
+              <span>{n}</span>
+              <span className="mono">{a.slice(0, 8)}…{a.slice(-6)}</span>
+            </a>
+          ))}
+          <a href="https://github.com/kapish505/Hallmark" target="_blank" rel="noreferrer">
+            <span>Source</span>
+            <span className="mono">github.com/kapish505/Hallmark</span>
+          </a>
+          <a href="/docs">
+            <span>Docs</span>
+            <span className="mono">integrate in ten lines</span>
+          </a>
+        </footer>
       </div>
     </WalletProvider>
   );

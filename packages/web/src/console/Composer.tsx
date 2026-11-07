@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getJson, tinybarToHbar } from "../api";
+import { GATEWAY, getJson, tinybarToHbar, TUNNEL_HEADERS } from "../api";
 import { useWallet } from "../WalletContext";
 import { payAndPost, payDirect } from "../wallet";
 
@@ -13,6 +13,42 @@ interface ManifestTask {
   available: boolean;
   validators: string[];
   accuracy: { expectedErrorBps: number; sampleSize: number; metric: string; measured: boolean };
+  bondMath?: { feeTinybar: string; cTinybar: string; marginTinybar: string; piBps: number; fpBps: number; minBondTinybar: string; floorTinybar: string; ceilingTinybar: string | null };
+  calibration?: { status: string; inputs: number; runs: number; machines: number; ranAt: string; cheatsPiBps: Record<string, number> };
+}
+interface DemoInfo { agent: { account: string; perDay: number; usedToday: number } | null }
+
+const pctBps = (b: number) => `${(b / 100).toFixed(b % 100 ? 1 : 0)}%`;
+
+/** "Why this bond": the measured numbers behind the bond, straight from the chain and the manifest. */
+function WhyBond({ t }: { t: ManifestTask }) {
+  const b = t.bondMath;
+  if (!b) return null;
+  const c = t.calibration;
+  return (
+    <details className="why-bond">
+      <summary>Why this bond?</summary>
+      <div className="wb-body">
+        <p>The bond is sized so cheating loses money on average, and the registry refuses a model whose bond would also punish honest operators.</p>
+        <dl className="kv">
+          <div><dt>Hardest cheat to catch</dt><dd>{pctBps(b.piBps)} of its outputs caught</dd></div>
+          <div><dt>Compute it saves</dt><dd>{tinybarToHbar(b.cTinybar)} per job</dd></div>
+          <div><dt>Honest false alarms</dt><dd>{pctBps(b.fpBps)}</dd></div>
+          <div><dt>Executor fee</dt><dd>{tinybarToHbar(b.feeTinybar)}</dd></div>
+          <div><dt>Re-run share</dt><dd>{t.auditBps / 100}%</dd></div>
+        </dl>
+        <div className="wb-window">
+          <div><span>Floor</span><b>{tinybarToHbar(b.floorTinybar)}</b><small>saved ÷ (re-run share × catch rate) − fee</small></div>
+          <div><span>Ceiling</span><b>{b.ceilingTinybar ? tinybarToHbar(b.ceilingTinybar) : "none"}</b><small>{b.ceilingTinybar ? "margin ÷ (re-run share × false alarms)" : "no honest false alarms measured"}</small></div>
+        </div>
+        {c && (
+          <p className="dim small">
+            Measured: {c.inputs} inputs × {c.runs} runs on {c.machines} machine{c.machines === 1 ? "" : "s"} ({c.status}, {c.ranAt.slice(0, 10)}). Compute saved is an operator estimate.
+          </p>
+        )}
+      </div>
+    </details>
+  );
 }
 interface Manifest {
   payTo: string;
@@ -37,6 +73,9 @@ export function Composer({ onJob }: { onJob: (id: string, token: string) => void
   const [minWords, setMinWords] = useState(3);
   const [cap, setCap] = useState("1");
   const [phase, setPhase] = useState<Phase>("idle");
+  const demo = useQuery({ queryKey: ["demo-info"], queryFn: () => getJson<DemoInfo>("/demo/scenarios"), refetchInterval: 60_000 });
+  const agent = demo.data?.agent ?? null;
+  const [payWith, setPayWith] = useState<"wallet" | "agent">("agent");
   const [msg, setMsg] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const t = manifest.data?.tasks.find((x) => x.task === task);
@@ -50,10 +89,12 @@ export function Composer({ onJob }: { onJob: (id: string, token: string) => void
 
   const pick = (f: File | undefined | null) => f && setFile(f);
   const connected = !!(w.signer || w.evmAddress);
+  const useAgent = payWith === "agent" && !!agent;
+  const ready = useAgent || connected;
   const busy = phase === "signing" || phase === "submitting";
 
   const go = async () => {
-    if (!file || !t || !manifest.data || !connected) return;
+    if (!file || !t || !manifest.data || !ready) return;
     try {
       // Re-read the price right before paying: it moves with the audit rate, and paying a stale price would be rejected.
       setMsg("Checking the current price…");
@@ -64,15 +105,28 @@ export function Composer({ onJob }: { onJob: (id: string, token: string) => void
       const f = new FormData();
       f.append("file", file);
       if (validator !== "none") f.append("validator", validator === "min_words" ? `min_words:${minWords}` : validator);
-      setPhase("signing");
-      setMsg(`Approve ${tinybarToHbar(t.priceTinybar)} in your wallet`);
       let body: Record<string, unknown>;
       let status: number;
-      if (w.kind === "evm" && w.evmAddress) {
+      if (useAgent) {
+        setPhase("submitting");
+        setMsg(`The demo agent is paying ${tinybarToHbar(t.priceTinybar)} over x402…`);
+        const g = new FormData();
+        g.append("task", task);
+        g.append("file", file);
+        if (validator !== "none") g.append("validator", validator === "min_words" ? `min_words:${minWords}` : validator);
+        const r = await fetch(`${GATEWAY}/demo/agent-job`, { method: "POST", headers: TUNNEL_HEADERS, body: g });
+        body = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+        status = r.status;
+        void demo.refetch();
+      } else if (w.kind === "evm" && w.evmAddress) {
+        setPhase("signing");
+        setMsg(`Approve ${tinybarToHbar(t.priceTinybar)} in your wallet`);
         if (!fresh.payToEvm) throw new Error("This gateway does not accept direct transfers.");
         const r = await payDirect(w.evmAddress, fresh.payToEvm, t.priceTinybar, t.endpoint.replace(/\/v1\/(transcribe|ocr)$/, `/v1/direct/${task}`), f);
         ({ body, status } = r);
       } else {
+        setPhase("signing");
+        setMsg(`Approve ${tinybarToHbar(t.priceTinybar)} in your wallet`);
         const r = await payAndPost(w.signer!, t.endpoint, f, { payTo: fresh.payTo, amountTinybar: t.priceTinybar, maxTinybar: BigInt(Math.round(Number(cap) * 1e8)) });
         ({ body, status } = r);
       }
@@ -158,8 +212,11 @@ export function Composer({ onJob }: { onJob: (id: string, token: string) => void
           </label>
         )}
         <label>
-          <span>Per-call cap (HBAR)</span>
-          <input value={cap} onChange={(e) => setCap(e.target.value)} inputMode="decimal" />
+          <span>Max price you'll pay</span>
+          <span className="unit-input">
+            <input value={cap} onChange={(e) => setCap(e.target.value)} inputMode="decimal" aria-label="Maximum price in HBAR" />
+            <em>HBAR</em>
+          </span>
         </label>
       </div>
 
@@ -168,12 +225,35 @@ export function Composer({ onJob }: { onJob: (id: string, token: string) => void
           <div><dt>Operator bond</dt><dd>{tinybarToHbar(t.bondTinybar)}</dd></div>
           <div><dt>Audit rate</dt><dd>{t.auditBps / 100}% re-run</dd></div>
           <div><dt>Pinned model error</dt><dd>{t.accuracy.measured ? `${(t.accuracy.expectedErrorBps / 100).toFixed(1)}% ${t.accuracy.metric}, n=${t.accuracy.sampleSize}` : "not measured"}</dd></div>
-          <div><dt>Payment</dt><dd>{w.kind === "evm" ? "Direct HBAR transfer" : "x402 on Hedera"}</dd></div>
+          <div>
+            <dt>Payment</dt>
+            <dd>{useAgent ? "x402 on Hedera · demo agent" : w.kind === "evm" ? "Direct HBAR transfer (EVM wallet)" : "x402 on Hedera · your wallet"}</dd>
+          </div>
         </dl>
       )}
+      {t && <WhyBond t={t} />}
 
-      <button className="btn-pay" disabled={!file || !t?.available || !connected || busy} onClick={go}>
-        {!connected ? "Connect a wallet to pay" : busy ? (phase === "signing" ? "Waiting for your wallet…" : "Submitting…") : `Pay ${t ? tinybarToHbar(t.priceTinybar) : ""} and run`}
+      <div className="pay-with" role="radiogroup" aria-label="Who pays">
+        <button role="radio" aria-checked={useAgent} className={useAgent ? "is-on" : ""} disabled={!agent} onClick={() => setPayWith("agent")}>
+          <b>Demo agent pays over x402</b>
+          <small>{agent ? `No wallet needed · testnet account ${agent.account} · ${Math.max(0, agent.perDay - agent.usedToday)} left today` : "Not enabled on this gateway"}</small>
+        </button>
+        <button role="radio" aria-checked={!useAgent} className={!useAgent ? "is-on" : ""} onClick={() => setPayWith("wallet")}>
+          <b>Pay with your wallet</b>
+          <small>{w.kind === "evm" ? "EVM wallets send a direct HBAR transfer (they can't sign Hedera x402)" : "HashPack via WalletConnect pays over x402"}</small>
+        </button>
+      </div>
+
+      <button className="btn-pay" disabled={!file || !t?.available || !ready || busy} onClick={go}>
+        {!ready
+          ? "Connect a wallet to pay"
+          : busy
+            ? phase === "signing"
+              ? "Waiting for your wallet…"
+              : "Paying and submitting…"
+            : useAgent
+              ? `Run it · agent pays ${t ? tinybarToHbar(t.priceTinybar) : ""}`
+              : `Pay ${t ? tinybarToHbar(t.priceTinybar) : ""} and run`}
       </button>
       {t && (
         <p className="pay-note">

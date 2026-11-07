@@ -29,22 +29,27 @@ export function NetworkPanel({ selected, onSelect }: { selected: string; onSelec
           <div><span>{n.data ? hb(n.data.pools.auditPool).toFixed(2) : "-"}</span><small>audit pool</small></div>
           <div><span>{n.data ? hb(n.data.pools.slashPool).toFixed(2) : "-"}</span><small>slashed</small></div>
         </div>
+        <div className="ops-legend">
+          <span><i className="free" />free stake (can be drawn)</span>
+          <span><i className="locked" />locked as job bonds</span>
+        </div>
         <ul className="ops">
           {ops.map((o) => {
             const f = hb(o.free);
             const l = hb(o.locked);
             return (
               <li key={o.address}>
-                <span className="mono">{short(o.address)}</span>
+                <a className="mono" href={`https://hashscan.io/testnet/account/${o.address}`} target="_blank" rel="noreferrer">{short(o.address)}</a>
                 <div className="bar" title={`${f.toFixed(2)} free · ${l.toFixed(2)} locked`}>
                   <i className="free" style={{ width: `${(f / maxStake) * 100}%` }} />
                   <i className="locked" style={{ width: `${(l / maxStake) * 100}%` }} />
                 </div>
+                <span className="mono dim op-amt">{(f + l).toFixed(1)}</span>
               </li>
             );
           })}
         </ul>
-        {c.data?.enabled && (
+        {c.data?.enabled && (c.data.asr?.runs ?? 0) + (c.data.ocr?.runs ?? 0) > 0 && (
           <div className="canary-row">
             <span className="eyebrow-sm">Canary accuracy</span>
             <span>Speech {pct(c.data.asr?.passRate)} <small className="dim">({c.data.asr?.runs ?? 0})</small></span>

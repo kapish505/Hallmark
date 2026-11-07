@@ -9,6 +9,8 @@ export interface JobEvent {
   args: Record<string, unknown>;
   tx: string;
   link: string | null;
+  /** Mirror Node consensus timestamp "seconds.nanos" (block number on local chains) */
+  position: string;
 }
 
 export interface JobView {

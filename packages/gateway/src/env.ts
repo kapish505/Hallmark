@@ -37,6 +37,14 @@ export const GatewayEnv = ChainEnv.extend({
   CANARY_ACCOUNT_ID: zEnv.accountId.optional(),
   CANARY_PRIVATE_KEY: zEnv.hex32.optional(),
   DEMO_MODE: zEnv.bool,
+  /** open the attack lab (scenarios, challenge, canary) to anyone, rate-limited; scenarios auto-reset */
+  DEMO_PUBLIC: zEnv.bool,
+  /** minutes after which a non-honest scenario resets to honest operators and the default audit rate */
+  DEMO_RESET_MINUTES: z.coerce.number().min(1).default(10),
+  /** audit rate restored on reset (bps) */
+  DEMO_DEFAULT_AUDIT_BPS: z.coerce.number().int().min(1).max(10_000).default(3000),
+  /** demo x402 agent: jobs per day it pays for (0 = off); it pays from the canary account */
+  DEMO_AGENT_PER_DAY: z.coerce.number().int().min(0).default(0),
   /** demo only (testnet): the contract owner key, so the attack lab can change the audit rate and file a challenge */
   DEMO_OWNER_PRIVATE_KEY: zEnv.hex32.optional(),
   /** "0xOperatorAddr=http://host:port,..." control endpoints of demo operators */

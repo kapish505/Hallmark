@@ -7,6 +7,18 @@ speech-to-text (Whisper large-v3) and OCR (Tesseract 5).
 **The claim:** verification for any model whose output we can reproduce; adding one means measuring it.
 A verdict says the output matches the pinned model. It does not say the output is true.
 
+## Try it (no wallet needed)
+
+Open the [console](https://hallmark-two.vercel.app/console), pick speech or OCR, drop a file, and leave
+**"Demo agent pays over x402"** selected: a funded testnet agent account pays the gateway over x402
+(30 jobs a day), and the job runs on the real bonded pool. Or connect HashPack (x402) or MetaMask (direct
+HBAR transfer) to pay yourself.
+
+To watch the protocol catch a cheat, open **Attack lab**, pick a misbehavior (garbage, a smaller model,
+truncation, a replayed answer, a no-show...), and run a job: the re-run share goes to 100% and the
+receipt shows the slash and the refund. Scenarios reset to honest operators after 10 minutes. Every event
+links to HashScan, and `pnpm verify <jobId>` re-derives the verdict from public chain data alone.
+
 ## The core
 
 | Piece | What it is |

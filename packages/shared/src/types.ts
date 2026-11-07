@@ -18,6 +18,24 @@ export const TaskInfo = z.object({
   accuracy: z.object({ expectedErrorBps: z.number(), sampleSize: z.number(), metric: z.enum(["WER", "CER"]), measured: z.boolean() }),
   validators: z.array(z.string()),
   limits: z.object({ maxBytes: z.number(), maxSeconds: z.number().optional(), maxPixels: z.number().optional() }),
+  /** why this bond: the on-chain inputs of the window check (tinybar as strings, rates in bps) */
+  bondMath: z
+    .object({
+      feeTinybar: z.string(),
+      cTinybar: z.string(),
+      marginTinybar: z.string(),
+      piBps: z.number(),
+      fpBps: z.number(),
+      minBondTinybar: z.string(),
+      floorTinybar: z.string(),
+      /** null = no ceiling (fp = 0) */
+      ceilingTinybar: z.string().nullable(),
+    })
+    .optional(),
+  /** calibration behind those numbers, from the model manifest */
+  calibration: z
+    .object({ status: z.string(), inputs: z.number(), runs: z.number(), machines: z.number(), ranAt: z.string(), cheatsPiBps: z.record(z.number()) })
+    .optional(),
 });
 export type TaskInfo = z.infer<typeof TaskInfo>;
 

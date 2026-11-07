@@ -38,7 +38,8 @@ const log = logger("gateway");
  */
 export async function loadTasks(contracts: Contracts, manifests: ModelManifest[]): Promise<TaskConfig[]> {
   const out: TaskConfig[] = [];
-  const auditBps = Number((await contracts.core.getParams()).auditBps);
+  const params = await contracts.core.getParams();
+  const auditBps = Number(params.auditBps);
   for (const manifest of manifests) {
     const task = manifest.task;
     const modelId = modelIdOfKey(manifest.modelKey);
@@ -59,6 +60,14 @@ export async function loadTasks(contracts: Contracts, manifests: ModelManifest[]
       expectedErrorBps: Number(m.expectedErrorBps),
       errorSampleSize: Number(m.errorSampleSize),
       available: Boolean(m.enabled) && Boolean(available),
+      bondMath: {
+        feeTinybar: BigInt(m.fee),
+        cTinybar: BigInt(m.cTinybar),
+        marginTinybar: BigInt(m.marginTinybar),
+        piBps: Number(m.piBps),
+        fpBps: Number(m.fpBps),
+        minBondTinybar: BigInt(params.minBond),
+      },
     });
   }
   return out;
@@ -155,7 +164,39 @@ export async function buildGateway(
     operatorControl,
     token: env.DEMO_CONTROL_TOKEN ?? "",
     refreshPrices: () => refreshPrices(),
+    resetAfterMs: env.DEMO_RESET_MINUTES * 60_000,
+    defaultAuditBps: env.DEMO_DEFAULT_AUDIT_BPS,
   });
+
+  // demo x402 agent: a real x402 payer (the canary account) that visitors without a wallet can use
+  let demoAgentP: Promise<HallmarkAgent> | null = null;
+  const demoAgent =
+    env.DEMO_MODE && env.DEMO_AGENT_PER_DAY > 0 && env.CANARY_ACCOUNT_ID && env.CANARY_PRIVATE_KEY
+      ? {
+          account: env.CANARY_ACCOUNT_ID,
+          perDay: env.DEMO_AGENT_PER_DAY,
+          submit: async (task: Task, input: Uint8Array, opts: { validator?: string; filename?: string }) => {
+            demoAgentP ??= (async () => {
+              const max = tasks.reduce((m, t) => (t.priceTinybar > m ? t.priceTinybar : m), 0n) * 3n;
+              return HallmarkAgent.hedera({
+                gatewayUrl: env.PUBLIC_URL,
+                accountId: env.CANARY_ACCOUNT_ID!,
+                privateKey: env.CANARY_PRIVATE_KEY!,
+                rpcUrl: env.RPC_URL,
+                rpcFallbackUrls: env.RPC_FALLBACK_URLS,
+                thirdwebSecretKey: env.THIRDWEB_SECRET_KEY,
+                policy: { maxPricePerCallTinybar: max, sessionBudgetTinybar: max * 100_000n },
+              });
+            })().catch((e) => {
+              demoAgentP = null;
+              throw e;
+            });
+            const agent = await demoAgentP;
+            await agent.discover(); // prices follow the audit rate
+            return agent.submit(task, input, opts);
+          },
+        }
+      : undefined;
   indexer.bus.on("event", (e: { name: string; jobId: string | null; args: Record<string, unknown> }) => {
     if (e.name === "StatusChanged" && Number(e.args.status) === 5 && e.jobId && db.job(e.jobId)) {
       void demo.maybeChallenge(e.jobId).catch((err) => log.warn("demo challenge failed", { error: String(err) }));
@@ -172,6 +213,7 @@ export async function buildGateway(
     manifests,
     canary,
     demo,
+    demoAgent,
     direct: mirror
       ? { lookup: (h) => mirror.evmTransfer(h), onPaid: (jobId, payer, settleTx) => pipeline.onSettled(jobId, payer, settleTx),
           onUnacceptable: (jobId, payer, settleTx) => {
@@ -190,6 +232,7 @@ export async function buildGateway(
       rateLimitPerMin: env.RATE_LIMIT_PER_MIN,
       contract: env.HALLMARK_ADDRESS,
       demoMode: env.DEMO_MODE,
+      demoPublic: env.DEMO_PUBLIC,
       demoControlToken: env.DEMO_CONTROL_TOKEN,
       operatorControl,
       watchers: env.EVIDENCE_WATCHERS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean),

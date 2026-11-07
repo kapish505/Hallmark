@@ -3,6 +3,8 @@ import multer from "multer";
 import { hexlify, keccak256, randomBytes, verifyMessage } from "ethers";
 import {
   badgeFor,
+  fairnessCeiling,
+  NO_CEILING,
   hashscanTx,
   HBAR_ASSET,
   inputHashOf,
@@ -54,6 +56,8 @@ export interface TaskConfig {
   expectedErrorBps: number;
   errorSampleSize: number;
   available: boolean;
+  /** on-chain window inputs (ModelRegistry.Model + params) */
+  bondMath: { feeTinybar: bigint; cTinybar: bigint; marginTinybar: bigint; piBps: number; fpBps: number; minBondTinybar: bigint };
 }
 
 
@@ -69,6 +73,15 @@ export interface AppDeps {
   manifests: ModelManifest[];
   canary?: CanaryRunner;
   demo?: DemoController;
+  /**
+   * Demo x402 agent (no wallet needed): pays the gateway over x402 from a funded testnet account the
+   * gateway holds, exactly like an outside agent would, and returns the job as soon as it is accepted.
+   */
+  demoAgent?: {
+    account: string;
+    perDay: number;
+    submit: (task: Task, input: Uint8Array, opts: { validator?: string; filename?: string }) => Promise<{ jobId: string; accessToken: string; settleTx: string | null; priceTinybar: string }>;
+  };
   /**
    * Direct-transfer payment option for EVM wallets (MetaMask cannot sign Hedera-native x402
    * transfers): look up a transfer on the Mirror Node, and hand a verified payment to the pipeline.
@@ -89,6 +102,8 @@ export interface AppDeps {
     rateLimitPerMin: number;
     contract: string;
     demoMode: boolean;
+    /** demo scenarios, challenge and canary open to anyone (rate-limited, auto-reset); no token needed */
+    demoPublic: boolean;
     demoControlToken?: string;
     operatorControl: Record<string, string>;
     /** extra readers of private evidence (add-on A1), lower-case addresses */
@@ -158,6 +173,21 @@ export function createApp(d: AppDeps) {
         accuracy: { expectedErrorBps: t.expectedErrorBps, sampleSize: t.errorSampleSize, metric: t.manifest.accuracy.metric, measured: t.errorSampleSize > 0 },
         validators: t.manifest.validators,
         limits: limitsOf(t.manifest),
+        bondMath: (() => {
+          const b = t.bondMath;
+          const ceil = fairnessCeiling(b.marginTinybar, t.auditBps, b.fpBps);
+          return {
+            feeTinybar: b.feeTinybar.toString(),
+            cTinybar: b.cTinybar.toString(),
+            marginTinybar: b.marginTinybar.toString(),
+            piBps: b.piBps,
+            fpBps: b.fpBps,
+            minBondTinybar: b.minBondTinybar.toString(),
+            floorTinybar: t.bondTinybar.toString(),
+            ceilingTinybar: ceil === NO_CEILING ? null : ceil.toString(),
+          };
+        })(),
+        calibration: { ...t.manifest.calibration, note: undefined },
       })),
       endpoints: {
         job: `${cfg.publicUrl}/v1/jobs/{jobId}`,
@@ -618,7 +648,13 @@ export function createApp(d: AppDeps) {
       const body = {
         contract: cfg.contract,
         params: Object.fromEntries(Object.entries(p.toObject()).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v])),
-        tasks: d.tasks().map((t) => ({ ...t, priceTinybar: t.priceTinybar.toString(), bondTinybar: t.bondTinybar.toString() })),
+        // plain JSON only: no manifest object, every bigint as a string
+        tasks: d.tasks().map(({ manifest: _m, bondMath, ...t }) => ({
+          ...t,
+          priceTinybar: t.priceTinybar.toString(),
+          bondTinybar: t.bondTinybar.toString(),
+          bondMath: Object.fromEntries(Object.entries(bondMath).map(([k, v]) => [k, typeof v === "bigint" ? v.toString() : v])),
+        })),
         operators: ops,
         pools: { auditPool: auditPool.toString(), slashPool: slashPool.toString(), treasury: treasury.toString(), escrow: escrow.toString() },
         slashes: slashes.map((s) => ({ ...JSON.parse(s.args), link: link(s.tx_hash) })),
@@ -634,7 +670,14 @@ export function createApp(d: AppDeps) {
       .finally(() => {
         networkRefresh = null;
       }));
-  app.get("/v1/network", async (_req, res) => {
+  app.get("/v1/network", async (_req, res, next) => {
+    try {
+      await sendNetwork(res);
+    } catch (e) {
+      next(e); // never let a serialization error take the process down
+    }
+  });
+  async function sendNetwork(res: Response) {
     if (!networkCache || Date.now() - networkCache.at > 5000) {
       const r = refreshNetwork();
       if (!networkCache) await r; // first request ever: nothing to serve yet
@@ -642,13 +685,20 @@ export function createApp(d: AppDeps) {
     if (!networkCache) return void res.status(503).json({ error: "network snapshot unavailable (the Hedera RPC is not answering); retry shortly" });
     const ageMs = Date.now() - networkCache.at;
     res.json({ ...networkCache.body, asOf: networkCache.at, stale: ageMs > 30_000, ...(networkError && ageMs > 30_000 ? { staleReason: "Hedera RPC unavailable" } : {}) });
-  });
+  }
 
   // ---------------------------------------------------------------- demo (attack lab)
+  /** admin-only (token): arbitrary per-operator behaviors and audit rates */
   const demoAuth = (req: Request, res: Response, next: NextFunction) => {
     if (!cfg.demoMode || !cfg.demoControlToken || req.headers.authorization !== `Bearer ${cfg.demoControlToken}`) return void res.status(401).json({ error: "demo control disabled or bad token" });
     next();
   };
+  /** the attack lab: open to anyone when DEMO_PUBLIC (rate-limited; scenarios reset to honest on their own) */
+  const demoOpen = (req: Request, res: Response, next: NextFunction) => {
+    if (cfg.demoMode && cfg.demoPublic) return next();
+    return demoAuth(req, res, next);
+  };
+  const demoLimit = rateLimit(6);
   /** {operator, behavior, role?} or {operator: "all", reset: true} */
   app.post("/demo/behavior", express.json(), demoAuth, async (req, res) => {
     const reset = req.body?.reset === true;
@@ -661,8 +711,17 @@ export function createApp(d: AppDeps) {
     res.status(out.every((s) => s === 200) ? 200 : 502).json({ updated: urls.length, statuses: out });
   });
   app.get("/demo/operators", (_req, res) => res.json(Object.keys(cfg.operatorControl)));
-  app.get("/demo/scenarios", (_req, res) => res.json({ scenarios: SCENARIOS, canSetAudit: !!d.demo?.canSetAudit, demoMode: cfg.demoMode }));
-  app.post("/demo/scenario", express.json(), demoAuth, async (req, res) => {
+  app.get("/demo/scenarios", (_req, res) =>
+    res.json({
+      scenarios: SCENARIOS,
+      canSetAudit: !!d.demo?.canSetAudit,
+      demoMode: cfg.demoMode,
+      public: cfg.demoMode && cfg.demoPublic,
+      active: d.demo?.active ?? null,
+      agent: d.demoAgent ? { account: d.demoAgent.account, perDay: d.demoAgent.perDay, usedToday: demoAgentUsed() } : null,
+    }),
+  );
+  app.post("/demo/scenario", demoLimit, express.json(), demoOpen, async (req, res) => {
     try {
       res.json(await d.demo!.apply(String(req.body?.id ?? "")));
     } catch (e) {
@@ -679,20 +738,69 @@ export function createApp(d: AppDeps) {
       res.status(400).json({ error: String(e instanceof Error ? e.message : e) });
     }
   });
-  app.post("/demo/challenge", express.json(), demoAuth, async (req, res) => {
+  app.post("/demo/reset", demoLimit, demoOpen, async (_req, res) => {
+    try {
+      await d.demo!.reset();
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(400).json({ error: String(e instanceof Error ? e.message : e) });
+    }
+  });
+  app.post("/demo/challenge", demoLimit, express.json(), demoOpen, async (req, res) => {
     try {
       res.json({ tx: await d.demo!.challenge(String(req.body?.jobId ?? "")) });
     } catch (e) {
       res.status(400).json({ error: String(e instanceof Error ? e.message : e) });
     }
   });
-  app.post("/demo/canary", demoAuth, async (_req, res) => {
+  app.post("/demo/canary", demoLimit, demoOpen, async (_req, res) => {
     if (!d.canary) return void res.status(501).json({ error: "canaries not configured" });
     void d.canary.runOnce().then((r) => !r.ok && log.warn("canary not run", { reason: r.reason })).catch((e) => log.warn("canary failed", { error: String(e) }));
     res.status(202).json({ started: true });
   });
 
   // ---------------------------------------------------------------- canaries (aggregate only)
+  // ---------------------------------------------------------------- demo x402 agent (no wallet needed)
+  let agentDay = "";
+  let agentCount = 0;
+  const today = () => new Date().toISOString().slice(0, 10);
+  function demoAgentUsed() {
+    if (agentDay !== today()) {
+      agentDay = today();
+      agentCount = 0;
+    }
+    return agentCount;
+  }
+  app.post(
+    "/demo/agent-job",
+    rateLimit(3),
+    (req, res, next) => upload.single("file")(req, res, (err) => (err ? res.status(400).json({ error: String(err.message ?? err) }) : next())),
+    async (req, res) => {
+      if (!d.demoAgent || !cfg.demoMode) return void res.status(404).json({ error: "the demo agent is not enabled on this gateway" });
+      if (demoAgentUsed() >= d.demoAgent.perDay) return void res.status(429).json({ error: `the demo agent has used its ${d.demoAgent.perDay} jobs for today; pay with your own wallet instead` });
+      const task = String(req.body?.task ?? "");
+      const mf = d.manifests.find((m) => m.task === task);
+      if (!mf || !req.file) return void res.status(400).json({ error: "task and a file are required" });
+      const bytes = new Uint8Array(req.file.buffer);
+      if (bytes.length > mf.input.maxBytes) return void res.status(413).json({ error: `input larger than ${mf.input.maxBytes} bytes` });
+      try {
+        checkInput(mf, bytes); // refuse before the agent pays for an input the model cannot take
+      } catch (e) {
+        return void res.status(415).json({ error: e instanceof MediaError ? e.message : "unreadable input" });
+      }
+      agentCount++;
+      try {
+        const validator = typeof req.body?.validator === "string" && req.body.validator !== "none" ? req.body.validator : undefined;
+        const r = await d.demoAgent.submit(task, bytes, { validator, filename: `input${mf.input.ext}` });
+        log.info("demo agent paid over x402", { task, jobId: r.jobId, tx: r.settleTx });
+        res.status(202).json({ ...r, payer: d.demoAgent.account, settleLink: r.settleTx ? link(r.settleTx) : null });
+      } catch (e) {
+        agentCount--;
+        res.status(502).json({ error: `demo agent payment failed: ${String(e instanceof Error ? e.message : e).slice(0, 300)}` });
+      }
+    },
+  );
+
   app.get("/v1/canaries", (_req, res) => res.json(d.canary ? d.canary.stats() : { enabled: false }));
 
 

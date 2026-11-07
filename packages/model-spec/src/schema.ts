@@ -79,6 +79,8 @@ export const Manifest = z
       machines: z.number().int().min(0),
       ranAt: z.string(),
       note: z.string().default(""),
+      /** measured share of each cheat's outputs the check catches, bps (from the calibration run) */
+      cheatsPiBps: z.record(bps).default({}),
     }),
     /** false = describe only; enabling is the registry owner's decision after review */
     enabled: z.boolean().default(false),

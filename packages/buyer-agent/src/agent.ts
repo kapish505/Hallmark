@@ -128,7 +128,16 @@ export class HallmarkAgent {
     return this.run("ocr", image, opts);
   }
 
-  async run(task: Task, input: Uint8Array, opts: RunOpts = {}): Promise<TaskResult> {
+  /**
+   * Pay over x402 and return as soon as the gateway accepts the job (no waiting for the verdict).
+   * The input-hash check against the gateway's answer still runs here.
+   */
+  async submit(task: Task, input: Uint8Array, opts: RunOpts = {}) {
+    const p = await this.pay(task, input, opts);
+    return { jobId: p.acc.jobId, accessToken: p.acc.accessToken, settleTx: p.settle?.success ? p.settle.transaction : null, priceTinybar: p.price.toString() };
+  }
+
+  private async pay(task: Task, input: Uint8Array, opts: RunOpts) {
     const m = this.manifest ?? (await this.discover());
     const entry = m.tasks.find((t) => t.task === task);
     if (!entry || !entry.available) throw new Error(`gateway does not offer ${task} right now`);
@@ -161,7 +170,11 @@ export class HallmarkAgent {
 
     const localHash = keccak256(input);
     if (localHash.toLowerCase() !== acc.inputHash.toLowerCase()) throw new Error("gateway reported a different inputHash than our audio");
+    return { m, acc, settle, price, hs, localHash };
+  }
 
+  async run(task: Task, input: Uint8Array, opts: RunOpts = {}): Promise<TaskResult> {
+    const { m, acc, settle, price, hs, localHash } = await this.pay(task, input, opts);
     const deadline = Date.now() + (opts.timeoutMs ?? 300_000);
     const mode = opts.mode ?? "accept-provisional";
     let chainHash: string | null = null;

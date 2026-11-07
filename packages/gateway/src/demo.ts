@@ -39,6 +39,9 @@ export const SCENARIOS: Scenario[] = [
  */
 export class DemoController {
   private pendingChallenge = false;
+  private resetTimer: NodeJS.Timeout | null = null;
+  /** the scenario in force (null = honest operators at the default audit rate) */
+  active: { id: string; title: string; expiresAt: number } | null = null;
 
   constructor(
     private readonly d: {
@@ -48,6 +51,10 @@ export class DemoController {
       operatorControl: Record<string, string>;
       token: string;
       refreshPrices: () => Promise<unknown>;
+      /** a non-honest scenario resets itself after this long, so one visitor cannot leave the pool rigged */
+      resetAfterMs?: number;
+      /** audit rate restored on reset */
+      defaultAuditBps?: number;
     },
   ) {}
 
@@ -88,7 +95,26 @@ export class DemoController {
       audit = `${s.audit / 100}%`;
     }
     this.pendingChallenge = !!s.challenge;
-    return { scenario: s, audit };
+    if (this.resetTimer) clearTimeout(this.resetTimer);
+    this.resetTimer = null;
+    this.active = null;
+    if (s.id !== "honest") {
+      const ms = this.d.resetAfterMs ?? 10 * 60_000;
+      this.active = { id: s.id, title: s.title, expiresAt: Date.now() + ms };
+      this.resetTimer = setTimeout(() => void this.reset().catch((e) => log.warn("scenario auto-reset failed", { error: String(e) })), ms);
+    }
+    return { scenario: s, audit, active: this.active };
+  }
+
+  /** honest operators, the default audit rate, no pending challenge */
+  async reset() {
+    if (this.resetTimer) clearTimeout(this.resetTimer);
+    this.resetTimer = null;
+    await this.setBehaviors({ reset: true });
+    if (this.canSetAudit) await this.setAudit(this.d.defaultAuditBps ?? 3000);
+    this.pendingChallenge = false;
+    this.active = null;
+    log.info("demo scenario reset to honest");
   }
 
   /** called by the keeper for each job that enters the challenge window */
