@@ -36,8 +36,8 @@ challenger bot, canary jobs, advisory validators, and the demo attack lab.
 ```js
 import { readFileSync } from "node:fs";
 import { JsonRpcProvider, Wallet } from "ethers";
-import { HallmarkClient } from "@hallmark/sdk";
-import { hederaTestnet as c } from "@hallmark/contracts";
+import { HallmarkClient } from "@kapish505/hallmark-sdk";
+import { hederaTestnet as c } from "@kapish505/hallmark-contracts";
 
 const signer = new Wallet(process.env.KEY, new JsonRpcProvider("https://testnet.hashio.io/api", 296));
 const hm = new HallmarkClient({ signer, contracts: { hallmark: c.HALLMARK_ADDRESS, verdict: c.VERDICT_ADDRESS }, evidenceUrl: process.env.EVIDENCE_URL });
@@ -47,8 +47,9 @@ console.log(v.verdict, (await hm.result(job)).text); // the text is checked agai
 ```
 
 Only `FinalAudited` means a second operator re-ran the job; `FinalUnaudited` and `AuditSkipped` are backed
-by the bond but not checked. The packages are 0.x alpha tarballs built by `npx tsx scripts/pack-core.ts`
-(not published to npm). `scripts/smoke-core.sh` installs only those tarballs in an empty directory and runs
+by the bond but not checked. The packages are 0.x alpha on npm: `@kapish505/hallmark-sdk`,
+`-contracts`, `-operator`, `-model-spec` (built by `npx tsx scripts/pack-core.ts`; the `@hallmark` npm scope
+belongs to someone else). `scripts/smoke-core.sh` installs only those packages in an empty directory and runs
 this example on testnet.
 
 Docs: [Integrate](docs/INTEGRATE.md) · [Run an operator](docs/RUN_AN_OPERATOR.md) ·
@@ -133,10 +134,10 @@ contracts/               Foundry project
   script/Deploy.s.sol    deploys and links the contracts (models are registered from manifests)
   flat/                  single-file sources (Remix, verification)
 packages/
-  contracts/             @hallmark/contracts: ABIs, testnet addresses
-  model-spec/            @hallmark/model-spec: manifest schema, hallmark-calibrate, hallmark-models
-  sdk/                   @hallmark/sdk: createJob direct to the contract, verdicts, checked results
-  operator/              @hallmark/operator: hallmark-operator init/run/status, challenger bot, model workers
+  contracts/             npm @kapish505/hallmark-contracts: ABIs, testnet addresses
+  model-spec/            npm @kapish505/hallmark-model-spec: manifest schema, hallmark-calibrate, hallmark-models
+  sdk/                   npm @kapish505/hallmark-sdk: createJob direct to the contract, verdicts, checked results
+  operator/              npm @kapish505/hallmark-operator: init/run/status, challenger bot, model workers
   shared/                units, normalization, overlap, bond math, commitments, validators, types
   gateway/               x402 client + evidence store: routes, settlement, refunds, indexer, keeper
   buyer-agent/           x402 CLI and library with spend policy and commitment check

@@ -6,19 +6,19 @@ Two ways to ask the Hallmark pool for work. Both end in the same on-chain verdic
 |---|---|---|
 | Who calls `createJob` | your account or contract | the gateway, after your x402 payment settles |
 | You pay | the contract, in HBAR, from your account | the gateway, over x402 |
-| You need | an EVM key with testnet HBAR, `@hallmark/sdk` | an x402 client with a Hedera account |
+| You need | an EVM key with testnet HBAR, `@kapish505/hallmark-sdk` | an x402 client with a Hedera account |
 
 ## Direct: from a service
 
 ```bash
-npm install ./hallmark-sdk-0.1.0-alpha.0.tgz ./hallmark-contracts-0.1.0-alpha.0.tgz ethers
+npm install @kapish505/hallmark-sdk @kapish505/hallmark-contracts ethers
 ```
 
 ```js
 import { readFileSync } from "node:fs";
 import { JsonRpcProvider, Wallet } from "ethers";
-import { HallmarkClient } from "@hallmark/sdk";
-import { hederaTestnet as c } from "@hallmark/contracts";
+import { HallmarkClient } from "@kapish505/hallmark-sdk";
+import { hederaTestnet as c } from "@kapish505/hallmark-contracts";
 
 const signer = new Wallet(process.env.KEY, new JsonRpcProvider("https://testnet.hashio.io/api", 296));
 const hm = new HallmarkClient({ signer, contracts: { hallmark: c.HALLMARK_ADDRESS, verdict: c.VERDICT_ADDRESS }, evidenceUrl: process.env.EVIDENCE_URL });
@@ -53,7 +53,7 @@ are `ASR_V1` (16 kHz mono WAV, up to 15 s) and `OCR_V1` (PNG, printed ASCII text
 Contracts **read** verdicts directly:
 
 ```solidity
-import {IHallmarkVerdict} from "@hallmark/contracts/src/IHallmarkVerdict.sol";
+import {IHallmarkVerdict} from "@kapish505/hallmark-contracts/src/IHallmarkVerdict.sol";
 
 IHallmarkVerdict v = IHallmarkVerdict(VERDICT_ADDRESS);
 if (v.finalizedAt(jobId) != 0 && v.status(jobId) == IHallmarkVerdict.Verdict.FinalAudited) { /* checked */ }
@@ -83,7 +83,7 @@ which goes to the two executors for their trouble. Register before you create.
 Agents that already speak x402 can pay the gateway and get the same job and verdict:
 
 ```js
-import { viaX402 } from "@hallmark/sdk";
+import { viaX402 } from "@kapish505/hallmark-sdk";
 const job = await viaX402({ gatewayUrl, endpoint: "/v1/ocr", input, filename: "page.png", fetchWithPayment });
 ```
 

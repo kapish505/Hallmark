@@ -32,7 +32,7 @@ const jobSteps: FStep[] = [
 const archNodes: FNode[] = [
   { id: "agent", x: 110, y: 70, label: "AI agent", sub: "pays over x402" },
   { id: "gw", x: 330, y: 70, label: "x402 gateway", sub: "a client, optional" },
-  { id: "svc", x: 110, y: 230, label: "Service", sub: "@hallmark/sdk" },
+  { id: "svc", x: 110, y: 230, label: "Service", sub: "@kapish505/hallmark-sdk" },
   { id: "dapp", x: 110, y: 390, label: "Smart contract", sub: "reads the verdict" },
   { id: "core", x: 520, y: 230, label: "Hallmark core", sub: "contracts on Hedera", kind: "core", w: 190 },
   { id: "man", x: 520, y: 70, label: "Model manifests", sub: "measured, then enabled", kind: "ghost" },
@@ -181,8 +181,8 @@ const USAGE: Array<{ id: string; who: string; title: string; lang: string; code:
     who: "A service",
     title: "Create a job on the contract",
     lang: "js",
-    code: `import { HallmarkClient } from "@hallmark/sdk";
-import { hederaTestnet as c } from "@hallmark/contracts";
+    code: `import { HallmarkClient } from "@kapish505/hallmark-sdk";
+import { hederaTestnet as c } from "@kapish505/hallmark-contracts";
 
 const hm = new HallmarkClient({
   signer, evidenceUrl,
@@ -417,7 +417,7 @@ export function Landing() {
             </div>
             <div>
               <h3>Clients</h3>
-              <p>The x402 gateway for agents, @hallmark/sdk for services, IHallmarkVerdict for contracts, and the console you can try now.</p>
+              <p>The x402 gateway for agents, @kapish505/hallmark-sdk for services, IHallmarkVerdict for contracts, and the console you can try now.</p>
             </div>
           </div>
         </div>

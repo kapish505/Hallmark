@@ -100,7 +100,7 @@ export function Docs() {
                   </tr>
                   <tr>
                     <td>You need</td>
-                    <td>An EVM key with testnet HBAR, @hallmark/sdk</td>
+                    <td>An EVM key with testnet HBAR, @kapish505/hallmark-sdk</td>
                     <td>An x402 client with a Hedera account</td>
                   </tr>
                   <tr>
@@ -120,13 +120,13 @@ export function Docs() {
 
           <Sec id="quickstart" title="Quickstart">
             <p>
-              The packages are 0.x alpha tarballs, not on npm yet. Build them from the repo with <code>npx tsx scripts/pack-core.ts</code>, then install:
+              The packages are 0.x alpha on npm under <code>@kapish505</code> (the <code>@hallmark</code> scope belongs to someone else):
             </p>
-            <Code lang="bash">{`npm install ./hallmark-sdk-0.1.0-alpha.0.tgz ./hallmark-contracts-0.1.0-alpha.0.tgz ethers`}</Code>
+            <Code lang="bash">{`npm install @kapish505/hallmark-sdk @kapish505/hallmark-contracts ethers`}</Code>
             <Code lang="js">{`import { readFileSync } from "node:fs";
 import { JsonRpcProvider, Wallet } from "ethers";
-import { HallmarkClient } from "@hallmark/sdk";
-import { hederaTestnet as c } from "@hallmark/contracts";
+import { HallmarkClient } from "@kapish505/hallmark-sdk";
+import { hederaTestnet as c } from "@kapish505/hallmark-contracts";
 
 const signer = new Wallet(process.env.KEY, new JsonRpcProvider("https://testnet.hashio.io/api", 296));
 const hm = new HallmarkClient({ signer, contracts: { hallmark: c.HALLMARK_ADDRESS, verdict: c.VERDICT_ADDRESS }, evidenceUrl: process.env.EVIDENCE_URL });
@@ -231,7 +231,7 @@ GET {EVIDENCE_URL}/v1/jobs/{jobId}/result      Authorization: Bearer <accessToke
 POST $GATEWAY/v1/ocr          (multipart: file)  # 402 → pay → 202 { jobId, accessToken }
 POST $GATEWAY/v1/transcribe   (multipart: file)
 GET  $GATEWAY/v1/jobs/{jobId}/result             # with the access token`}</Code>
-            <Code lang="js">{`import { viaX402 } from "@hallmark/sdk";
+            <Code lang="js">{`import { viaX402 } from "@kapish505/hallmark-sdk";
 // fetchWithPayment = wrapFetchWithPayment(fetch, x402Client) from @x402/fetch, with a Hedera signer
 const job = await viaX402({ gatewayUrl, endpoint: "/v1/ocr", input, filename: "page.png", fetchWithPayment });
 const v = await hm.waitForVerdict(job.jobId);`}</Code>
@@ -240,7 +240,7 @@ const v = await hm.waitForVerdict(job.jobId);`}</Code>
           </Sec>
 
           <Sec id="contracts" title="From a smart contract">
-            <Code lang="solidity">{`import {IHallmarkVerdict} from "@hallmark/contracts/src/IHallmarkVerdict.sol";
+            <Code lang="solidity">{`import {IHallmarkVerdict} from "@kapish505/hallmark-contracts/src/IHallmarkVerdict.sol";
 
 IHallmarkVerdict v = IHallmarkVerdict(${VERDICT});
 if (v.finalizedAt(jobId) != 0 && v.status(jobId) == IHallmarkVerdict.Verdict.FinalAudited) {
@@ -262,7 +262,7 @@ if (v.finalizedAt(jobId) != 0 && v.status(jobId) == IHallmarkVerdict.Verdict.Fin
           </Sec>
 
           <Sec id="operator" title="Run an operator">
-            <Code lang="bash">{`npm install ./hallmark-operator-0.2.0-alpha.0.tgz
+            <Code lang="bash">{`npm install -g @kapish505/hallmark-operator
 npx hallmark-operator init ./node      # writes .env, docker-compose.yml, models/
 cd node && docker compose up -d --build
 npx hallmark-operator run               # registers with STAKE_TINYBAR, then serves seats

@@ -1,8 +1,8 @@
 // The README example: a service creates a job directly on the contract and reads the verdict.
 import { readFileSync } from "node:fs";
 import { JsonRpcProvider, Wallet } from "ethers";
-import { HallmarkClient } from "@hallmark/sdk";
-import { hederaTestnet as c } from "@hallmark/contracts";
+import { HallmarkClient } from "@kapish505/hallmark-sdk";
+import { hederaTestnet as c } from "@kapish505/hallmark-contracts";
 
 const signer = new Wallet(process.env.KEY, new JsonRpcProvider("https://testnet.hashio.io/api", 296));
 const hm = new HallmarkClient({ signer, contracts: { hallmark: c.HALLMARK_ADDRESS, verdict: c.VERDICT_ADDRESS }, evidenceUrl: process.env.EVIDENCE_URL });

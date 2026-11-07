@@ -15,7 +15,7 @@ it loses part of its bond for not showing up and all of it for a wrong output. T
 ## Install
 
 ```bash
-npm install ./hallmark-operator-0.2.0-alpha.0.tgz
+npm install -g @kapish505/hallmark-operator
 npx hallmark-operator init ./my-operator
 cd my-operator
 ```

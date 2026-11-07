@@ -1,8 +1,9 @@
 /**
- * Pack the core as 0.x alpha tarballs (NOT published): @hallmark/contracts, @hallmark/model-spec,
- * @hallmark/sdk, @hallmark/operator. Workspace code is bundled in, so each tarball installs on its own
- * from npm deps only (ethers, zod).
- *   npx tsx scripts/pack-core.ts            -> dist-pack/hallmark-*.tgz
+ * Pack the core as 0.x alpha npm packages. Workspace code is bundled in, so each package installs on its
+ * own from npm deps only (ethers, zod). Published names (the @hallmark scope on npm belongs to someone
+ * else): @kapish505/hallmark-contracts, -model-spec, -sdk, -operator. Override the scope with NPM_SCOPE.
+ *   npx tsx scripts/pack-core.ts                 -> dist-pack/*.tgz
+ *   npx tsx scripts/pack-core.ts --publish       -> also npm publish each (needs `npm login`), tag alpha
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,6 +16,26 @@ const STAGE = join(OUT, "stage");
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(STAGE, { recursive: true });
 const DEPS = { ethers: "6.13.1", zod: "3.23.8" };
+const SCOPE = process.env.NPM_SCOPE ?? "@kapish505";
+const NAME: Record<string, string> = {
+  contracts: `${SCOPE}/hallmark-contracts`,
+  "model-spec": `${SCOPE}/hallmark-model-spec`,
+  sdk: `${SCOPE}/hallmark-sdk`,
+  operator: `${SCOPE}/hallmark-operator`,
+};
+const PUBLISH = process.argv.includes("--publish");
+const REPO = "https://github.com/kapish505/Hallmark";
+const COMMON = {
+  license: "MIT",
+  author: "kapish505",
+  homepage: "https://hallmark-two.vercel.app/docs",
+  repository: { type: "git", url: `git+${REPO}.git` },
+  bugs: { url: `${REPO}/issues` },
+  keywords: ["hallmark", "verifiable-inference", "hedera", "x402", "ai", "slashing", "bonds"],
+  engines: { node: ">=20" },
+  publishConfig: { access: "public", tag: "alpha" },
+};
+const published: string[] = [];
 const pkgJson = (dir: string) => JSON.parse(readFileSync(join(ROOT, "packages", dir, "package.json"), "utf8"));
 
 async function bundle(entry: string, outfile: string, banner = "") {
@@ -57,15 +78,20 @@ function dts(entry: string, outFile: string) {
   }
 }
 
-function pack(dir: string, manifest: Record<string, unknown>) {
+function pack(dir: string, key: string, manifest: Record<string, unknown>) {
   writeFileSync(join(dir, "package.json"), JSON.stringify(manifest, null, 2) + "\n");
   cpSync(join(ROOT, "LICENSE"), join(dir, "LICENSE"));
+  cpSync(join(ROOT, "scripts/npm-readmes", `${key}.md`), join(dir, "README.md"));
   const out = execFileSync("npm", ["pack", "--pack-destination", OUT], { cwd: dir, encoding: "utf8" }).trim().split("\n").pop();
   console.log(`packed ${out}`);
+  if (PUBLISH) {
+    execFileSync("npm", ["publish", "--access", "public", "--tag", "alpha"], { cwd: dir, stdio: "inherit" });
+    published.push(`${manifest.name}@${manifest.version}`);
+  }
 }
 const meta = (dir: string) => {
   const p = pkgJson(dir);
-  return { name: p.name, version: p.version, description: p.description, license: "MIT", type: "module" };
+  return { name: NAME[dir], version: p.version, description: p.description, type: "module", ...COMMON };
 };
 
 // ---- @hallmark/contracts
@@ -80,7 +106,7 @@ const meta = (dir: string) => {
   cpSync(join(ROOT, "contracts/examples"), join(d, "examples"), { recursive: true });
   cpSync(join(ROOT, "contracts/script/Deploy.s.sol"), join(d, "script/Deploy.s.sol"));
   const p = pkgJson("contracts");
-  pack(d, { ...meta("contracts"), exports: p.exports, files: ["index.js", "index.d.ts", "abi", "deployments", "src", "examples", "script"] });
+  pack(d, "contracts", { ...meta("contracts"), exports: p.exports, files: ["index.js", "index.d.ts", "abi", "deployments", "src", "examples", "script"] });
 }
 
 // ---- @hallmark/model-spec
@@ -92,7 +118,7 @@ const meta = (dir: string) => {
   await bundle("packages/model-spec/src/models-cli.ts", join(d, "dist/models-cli.js"));
   dts("packages/model-spec/src/index.ts", join(d, "dist/index.d.ts"));
   cpSync(join(ROOT, "models"), join(d, "models"), { recursive: true });
-  pack(d, {
+  pack(d, "model-spec", {
     ...meta("model-spec"),
     exports: { ".": { types: "./dist/index.d.ts", default: "./dist/index.js" } },
     bin: { "hallmark-calibrate": "./dist/calibrate-cli.js", "hallmark-models": "./dist/models-cli.js" },
@@ -107,7 +133,7 @@ const meta = (dir: string) => {
   mkdirSync(join(d, "dist"), { recursive: true });
   await bundle("packages/sdk/src/index.ts", join(d, "dist/index.js"));
   dts("packages/sdk/src/index.ts", join(d, "dist/index.d.ts"));
-  pack(d, { ...meta("sdk"), exports: { ".": { types: "./dist/index.d.ts", default: "./dist/index.js" } }, files: ["dist"], dependencies: { ethers: DEPS.ethers } });
+  pack(d, "sdk", { ...meta("sdk"), exports: { ".": { types: "./dist/index.d.ts", default: "./dist/index.js" } }, files: ["dist"], dependencies: { ethers: DEPS.ethers } });
 }
 
 // ---- @hallmark/operator
@@ -118,6 +144,11 @@ const meta = (dir: string) => {
   cpSync(join(ROOT, "models"), join(d, "models"), { recursive: true });
   cpSync(join(ROOT, "packages/contracts/deployments"), join(d, "deployments"), { recursive: true });
   cpSync(join(ROOT, "packages/operator/worker"), join(d, "workers"), { recursive: true });
-  pack(d, { ...meta("operator"), bin: { "hallmark-operator": "./dist/cli.js" }, files: ["dist", "models", "deployments", "workers"], dependencies: DEPS });
+  pack(d, "operator", { ...meta("operator"), bin: { "hallmark-operator": "./dist/cli.js" }, files: ["dist", "models", "deployments", "workers"], dependencies: DEPS });
 }
 rmSync(STAGE, { recursive: true, force: true });
+if (PUBLISH) {
+  // make each alpha the default install too (there is no stable release yet)
+  for (const p of published) execFileSync("npm", ["dist-tag", "add", p, "latest"], { stdio: "inherit" });
+  console.log(`published: ${published.join(", ")}`);
+}

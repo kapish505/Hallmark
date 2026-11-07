@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fresh-install smoke test of the core (section 6.6):
-#   1. pack the core packages into tarballs (scripts/pack-core.ts)
-#   2. install ONLY those tarballs in an empty temp directory outside the repo
+#   1. pack the core packages into tarballs (scripts/pack-core.ts), or with SOURCE=registry use npm
+#   2. install ONLY those packages in an empty temp directory outside the repo
 #   3. run the README example on Hedera testnet with a funded test key
 #   4. assert a final verdict and print explorer links
 # Needs: SMOKE_PRIVATE_KEY (or env/smoke.env), a running evidence store (EVIDENCE_URL, default: the
@@ -16,15 +16,23 @@ if [ -z "${EVIDENCE_URL:-}" ]; then
 fi
 echo "evidence store: $EVIDENCE_URL"
 
-(cd "$ROOT" && npx tsx scripts/pack-core.ts)
+SCOPE="${NPM_SCOPE:-@kapish505}"
+if [ "${SOURCE:-tarballs}" = "registry" ]; then
+  PKGS="$SCOPE/hallmark-sdk@alpha $SCOPE/hallmark-contracts@alpha $SCOPE/hallmark-model-spec@alpha $SCOPE/hallmark-operator@alpha"
+  echo "installing from the npm registry: $PKGS"
+else
+  (cd "$ROOT" && npx tsx scripts/pack-core.ts)
+  PKGS="$(ls "$ROOT"/dist-pack/*hallmark-*.tgz | tr '\n' ' ')"
+fi
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/hallmark-smoke.XXXXXX")"
 echo "fresh install in $WORK"
 cp "$ROOT/scripts/smoke/example.mjs" "$ROOT/scripts/smoke/input.png" "$WORK/"
 cd "$WORK"
 npm init -y >/dev/null
-npm install --no-audit --no-fund "$ROOT"/dist-pack/hallmark-*.tgz >/dev/null
-echo "installed: $(ls node_modules/@hallmark | tr '\n' ' ')"
-[ -d node_modules/@hallmark/shared ] && { echo "FAIL: a workspace-only package leaked into the install"; exit 1; }
+# shellcheck disable=SC2086
+npm install --no-audit --no-fund $PKGS >/dev/null
+echo "installed: $(ls "node_modules/$SCOPE" | tr '\n' ' ')"
+[ -d node_modules/@hallmark ] && { echo "FAIL: a workspace-only @hallmark package leaked into the install"; exit 1; }
 
 OUT="$(KEY="$SMOKE_PRIVATE_KEY" EVIDENCE_URL="$EVIDENCE_URL" INPUT=input.png node example.mjs | tee /dev/stderr)"
 LINE="$(printf '%s\n' "$OUT" | sed -n 's/^SMOKE //p')"
